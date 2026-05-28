@@ -163,7 +163,7 @@ export default async function DashboardPage() {
             boxShadow: '0 0 0 1px rgba(204,255,0,0.25), 0 8px 24px rgba(204,255,0,0.08)',
             overflow: 'hidden',
           }}>
-            <div style={{ padding: '18px 18px 14px' }}>
+            <Link href={`/treino/${fichaHoje.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', padding: '18px 18px 14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -232,11 +232,12 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </Link>
 
             <div style={{ padding: '0 14px 14px' }}>
               <DashboardHeroButton
                 fichaId={fichaHoje.id}
+                fichaLetra={fichaHoje.letra ?? ''}
                 cor={fichaHoje.cor ?? 'var(--accent)'}
                 isCompleted={!!treinoHoje}
                 duracaoMin={treinoHoje?.duracao_min ?? null}

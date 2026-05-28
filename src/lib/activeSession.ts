@@ -2,7 +2,8 @@ export interface ActiveSession {
   fichaId: string
   fichaLetra: string
   cor: string
-  startTime: number // Date.now()
+  startTime: number  // Date.now() at session start (adjusted on resume)
+  pausedAt?: number  // Date.now() when paused; absent = running
 }
 
 const KEY = 'meutreino_active_session'

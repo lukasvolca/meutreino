@@ -586,8 +586,15 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   useEffect(() => {
     const existing = getActiveSession()
     if (existing?.fichaId === ficha.id) {
-      // Resume: restore start time so timer is continuous
-      startTimeRef.current = existing.startTime
+      if (existing.pausedAt) {
+        // Was paused on dashboard — resume: adjust startTime, clear pausedAt
+        const pausedElapsed = existing.pausedAt - existing.startTime
+        const newStart = Date.now() - pausedElapsed
+        startTimeRef.current = newStart
+        setActiveSession({ ...existing, startTime: newStart, pausedAt: undefined })
+      } else {
+        startTimeRef.current = existing.startTime
+      }
     } else {
       const t = Date.now()
       startTimeRef.current = t
