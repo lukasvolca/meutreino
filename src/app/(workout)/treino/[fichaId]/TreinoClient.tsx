@@ -1,0 +1,724 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import Icon from '@/components/icons'
+import { Sparkline } from '@/components/charts'
+import type { Database } from '@/lib/supabase/types'
+
+type Ficha = Database['public']['Tables']['fichas']['Row']
+type Exercicio = Database['public']['Tables']['exercicios']['Row']
+
+interface SetState {
+  done: boolean
+  carga: number
+  reps: number
+  duracaoSeg: number
+  duracaoMin: number
+}
+
+function buildInitialSets(ex: Exercicio): SetState[] {
+  if (ex.tipo === 'cardio') {
+    return [{ done: false, carga: 0, reps: 0, duracaoSeg: 0, duracaoMin: ex.duracao_min ?? 10 }]
+  }
+  if (ex.tipo === 'iso') {
+    return Array.from({ length: ex.series }, () => ({
+      done: false, carga: 0, reps: 0, duracaoSeg: ex.duracao_seg ?? 30, duracaoMin: 0,
+    }))
+  }
+  const reps = parseInt(String(ex.reps ?? '10').split('-')[0]) || 10
+  return Array.from({ length: ex.series }, () => ({
+    done: false, carga: ex.carga, reps, duracaoSeg: 0, duracaoMin: 0,
+  }))
+}
+
+// ── InlineNumber ──────────────────────────────────────────────────────────────
+function InlineNumber({ value, onChange, suffix, width = 56, color, fontSize = 17 }: {
+  value: number, onChange: (v: number) => void, suffix?: string,
+  width?: number, color?: string, fontSize?: number
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { if (!editing) setDraft(String(value)) }, [value, editing])
+  useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select() } }, [editing])
+
+  function commit() {
+    const n = parseFloat(draft.replace(',', '.'))
+    if (!isNaN(n)) onChange(n)
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input ref={inputRef} type="text" inputMode="decimal" value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+        style={{
+          width, height: 30, padding: '0 6px',
+          background: 'var(--surface-3)', border: `1px solid ${color || 'var(--accent)'}`,
+          borderRadius: 8, color: 'var(--text)',
+          fontFamily: 'var(--font-mono)', fontSize, fontWeight: 600,
+          textAlign: 'center', outline: 'none',
+        }}
+      />
+    )
+  }
+  return (
+    <span onClick={() => setEditing(true)} style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2,
+      minWidth: width, height: 30, padding: '0 6px',
+      background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)',
+      borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize, fontWeight: 600,
+      color: color || 'var(--text)', cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
+    }}>
+      {value}{suffix && <span style={{ color: 'var(--muted-2)', fontSize: 11, marginLeft: 2 }}>{suffix}</span>}
+    </span>
+  )
+}
+
+// ── SetRow ─────────────────────────────────────────────────────────────────────
+function SetRow({ idx, set, tipo, accent, onToggle, onUpdate }: {
+  idx: number, set: SetState, tipo: string, accent: string,
+  onToggle: () => void, onUpdate: (patch: Partial<SetState>) => void,
+}) {
+  const done = set.done
+  const checkBtn = (
+    <button onClick={onToggle} style={{
+      width: 30, height: 30, borderRadius: 8,
+      background: done ? accent : 'rgba(255,255,255,0.05)',
+      border: done ? 'none' : '1px solid var(--border-strong)',
+      color: done ? 'var(--accent-ink)' : 'var(--muted-2)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: done ? `0 0 12px ${accent}40` : 'none', cursor: 'pointer',
+    }}>
+      <Icon name="check" size={16} strokeWidth={2.6} color="currentColor"/>
+    </button>
+  )
+  const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted-2)', letterSpacing: '0.06em', fontWeight: 600 }
+  const unitStyle: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)' }
+  const base: React.CSSProperties = { display: 'grid', alignItems: 'center', padding: '8px 0', gap: 8, opacity: done ? 0.55 : 1, transition: 'opacity 180ms' }
+
+  if (tipo === 'iso') return (
+    <div style={{ ...base, gridTemplateColumns: '28px 1fr 36px' }}>
+      <div style={labelStyle}>S{idx + 1}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <InlineNumber value={set.duracaoSeg} onChange={v => onUpdate({ duracaoSeg: v })} width={56} fontSize={14}/>
+        <span style={unitStyle}>seg</span>
+      </div>
+      {checkBtn}
+    </div>
+  )
+
+  if (tipo === 'cardio') return (
+    <div style={{ ...base, gridTemplateColumns: '28px 1fr 36px' }}>
+      <div style={labelStyle}><Icon name="timer" size={13} color="var(--muted-2)"/></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <InlineNumber value={set.duracaoMin} onChange={v => onUpdate({ duracaoMin: v })} width={56} fontSize={14}/>
+        <span style={unitStyle}>min</span>
+      </div>
+      {checkBtn}
+    </div>
+  )
+
+  return (
+    <div style={{ ...base, gridTemplateColumns: '28px 1fr 1fr 36px' }}>
+      <div style={labelStyle}>S{idx + 1}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={42} fontSize={14}/>
+        <span style={unitStyle}>reps</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={50} fontSize={14}/>
+        <span style={unitStyle}>kg</span>
+      </div>
+      {checkBtn}
+    </div>
+  )
+}
+
+// ── ExerciseCard ───────────────────────────────────────────────────────────────
+function ExerciseCard({ ex, idx, sets, expanded, accent, historico, onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onStartRest }: {
+  ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
+  historico: number[], onToggleExpanded: () => void,
+  onUpdateSet: (i: number, patch: Partial<SetState>) => void,
+  onAddSet: () => void, onRemoveSet: () => void,
+  onPlayVideo: () => void, onEdit: () => void,
+  onStartRest: (sec: number) => void,
+}) {
+  const completedSets = sets.filter(s => s.done).length
+  const allDone = completedSets === sets.length && sets.length > 0
+  const tipo = ex.tipo ?? 'forca'
+  const isCardio = tipo === 'cardio'
+  const isIso = tipo === 'iso'
+
+  let metaSummary: React.ReactNode
+  if (isCardio) {
+    metaSummary = <span>{ex.duracao_min}min{ex.intensidade ? ` · ${ex.intensidade}` : ''}</span>
+  } else if (isIso) {
+    metaSummary = <span>{ex.series}×{ex.duracao_seg}s</span>
+  } else {
+    const lastCarga = sets[0]?.carga ?? ex.carga
+    metaSummary = <><span>{ex.series}×{ex.reps}</span><span style={{ color: 'var(--muted-3)' }}> · </span><span>{lastCarga}kg</span></>
+  }
+
+  return (
+    <div style={{
+      background: 'var(--surface-1)',
+      border: `1px solid ${allDone ? `${accent}40` : 'var(--border)'}`,
+      borderRadius: 20, overflow: 'hidden', transition: 'border-color 200ms', position: 'relative',
+    }}>
+      {allDone && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, boxShadow: `0 0 12px ${accent}` }}/>}
+
+      {/* Header */}
+      <div onClick={onToggleExpanded} style={{
+        padding: '12px 14px 12px 8px', display: 'flex', alignItems: 'center', gap: 8,
+        cursor: 'pointer', userSelect: 'none',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-3)', cursor: 'grab', padding: '4px 2px' }}>
+          <Icon name="drag" size={16} color="var(--muted-3)"/>
+        </div>
+        <div style={{
+          width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+          background: allDone ? accent : 'var(--surface-2)',
+          color: allDone ? 'var(--accent-ink)' : 'var(--text)',
+          border: allDone ? 'none' : '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 12,
+        }}>
+          {allDone ? <Icon name="check" size={15} strokeWidth={2.8} color="currentColor"/> : String(idx + 1).padStart(2, '0')}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ex.nome}</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 3, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>
+            {ex.grupo && <><span style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>{ex.grupo}</span><span style={{ color: 'var(--muted-3)' }}>·</span></>}
+            {metaSummary}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {completedSets > 0 && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: allDone ? `${accent}24` : 'rgba(109,255,176,0.14)', color: allDone ? accent : '#6dffb0', letterSpacing: '0.04em' }}>
+                {completedSets}/{sets.length}
+              </span>
+            )}
+            <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-2)', transition: 'transform 220ms', transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+              <Icon name="chevronDown" size={14} color="var(--muted-2)"/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded */}
+      {expanded && (
+        <>
+          <div style={{ padding: '0 16px 4px', animation: 'fade-in 200ms ease' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: (isCardio || isIso) ? '28px 1fr 36px' : '28px 1fr 1fr 36px', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8, paddingBottom: 6 }}>
+              {isCardio ? (
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>—</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>DURAÇÃO</div><div/></>
+              ) : isIso ? (
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>TEMPO</div><div/></>
+              ) : (
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA</div><div/></>
+              )}
+            </div>
+            {sets.map((s, i) => (
+              <SetRow key={i} idx={i} set={s} tipo={tipo} accent={accent}
+                onToggle={() => {
+                  onUpdateSet(i, { done: !s.done })
+                  if (!s.done && !isCardio) onStartRest(ex.descanso ?? 60)
+                }}
+                onUpdate={patch => onUpdateSet(i, patch)}
+              />
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, padding: '10px 14px 14px', borderTop: '1px solid var(--border)' }}>
+            <button onClick={e => { e.stopPropagation(); onPlayVideo() }} style={{
+              flex: 1, height: 36, padding: '0 12px',
+              background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+              borderRadius: 10, color: 'var(--text)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              fontSize: 12, fontWeight: 600,
+            }}>
+              <Icon name="playCircle" size={14} color={accent}/>
+              Ver execução
+            </button>
+            <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
+              width: 36, height: 36,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+              borderRadius: 10, color: 'var(--muted)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon name="edit" size={14} color="currentColor"/>
+            </button>
+            {!isCardio && (
+              <>
+                <button onClick={e => { e.stopPropagation(); onAddSet() }} style={{ height: 36, padding: '0 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}>
+                  <Icon name="plus" size={13} color="currentColor"/> 1 set
+                </button>
+                <button onClick={e => { e.stopPropagation(); if (sets.length > 1) onRemoveSet() }} style={{ height: 36, padding: '0 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, opacity: sets.length > 1 ? 1 : 0.4 }}>
+                  <Icon name="minus" size={13} color="currentColor"/> 1 set
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── RestTimer ──────────────────────────────────────────────────────────────────
+function RestTimer({ duration, accent, onDone, onCancel }: {
+  duration: number, accent: string, onDone: () => void, onCancel: () => void
+}) {
+  const [remaining, setRemaining] = useState(duration)
+  const durationRef = useRef(duration)
+
+  useEffect(() => {
+    durationRef.current = duration
+    setRemaining(duration)
+    const id = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) { clearInterval(id); onDone(); return 0 }
+        return r - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [duration]) // eslint-disable-line
+
+  const pct = durationRef.current > 0 ? remaining / durationRef.current : 0
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
+  const ss = String(remaining % 60).padStart(2, '0')
+  const C = 2 * Math.PI * 19
+
+  return (
+    <div style={{
+      position: 'absolute', left: 16, right: 16, bottom: 12, zIndex: 70,
+      background: 'rgba(10,11,13,0.96)', backdropFilter: 'blur(12px)',
+      border: `1px solid ${accent}60`,
+      borderRadius: 16, padding: '12px 16px',
+      display: 'flex', alignItems: 'center', gap: 14,
+      boxShadow: `0 8px 28px rgba(0,0,0,0.45), 0 0 20px ${accent}20`,
+      animation: 'slide-up 260ms cubic-bezier(.2,.7,.3,1)',
+    }}>
+      <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
+        <svg width="44" height="44">
+          <circle cx="22" cy="22" r="19" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
+          <circle cx="22" cy="22" r="19" fill="none" stroke={accent} strokeWidth="3"
+            strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
+            transform="rotate(-90 22 22)"
+            style={{ transition: 'stroke-dashoffset 1s linear', filter: `drop-shadow(0 0 6px ${accent})` }}/>
+        </svg>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="timer" size={16} color={accent}/>
+        </div>
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', letterSpacing: '0.14em' }}>DESCANSO</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 2 }}>
+          {mm}:{ss}
+        </div>
+      </div>
+      <button onClick={() => setRemaining(r => Math.min(durationRef.current, r + 15))} style={{
+        height: 32, padding: '0 12px',
+        background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
+        borderRadius: 16, color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      }}>+15s</button>
+      <button onClick={onCancel} style={{
+        width: 32, height: 32, borderRadius: 16,
+        background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
+        color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      }}>
+        <Icon name="x" size={14} color="currentColor"/>
+      </button>
+    </div>
+  )
+}
+
+// ── VideoModal ─────────────────────────────────────────────────────────────────
+function VideoModal({ ex, onClose }: { ex: Exercicio, onClose: () => void }) {
+  const ytUrl = `https://www.youtube-nocookie.com/embed/${ex.yt_id}?autoplay=1&modestbranding=1&rel=0`
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', animation: 'fade-in 200ms ease' }}/>
+      <div style={{
+        position: 'absolute', top: '50%', left: 16, right: 16,
+        transform: 'translateY(-50%)',
+        background: 'var(--surface-1)', borderRadius: 24,
+        border: '1px solid var(--border-strong)', overflow: 'hidden',
+        animation: 'scale-in 250ms cubic-bezier(.2,.7,.3,1)',
+        boxShadow: '0 30px 60px rgba(0,0,0,0.6)',
+      }}>
+        <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
+          <iframe src={ytUrl} title={ex.nome} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}/>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '16px 18px 14px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent)', fontWeight: 500 }}>EXECUÇÃO · YOUTUBE</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', marginTop: 4, lineHeight: 1.2 }}>{ex.nome}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {ex.grupo && <span style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{ex.grupo}</span>}
+              {ex.series && ex.reps && <span style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em' }}>{ex.series}×{ex.reps}</span>}
+              {ex.carga > 0 && <span style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em' }}>{ex.carga}kg</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 36, height: 36, borderRadius: 18,
+            background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
+            color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+          }}>
+            <Icon name="x" size={16} color="currentColor"/>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ExerciseEditor (BottomSheet) ───────────────────────────────────────────────
+function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
+  ex: Partial<Exercicio> | null, fichaId: string,
+  onClose: () => void, onSaved: (saved: Exercicio) => void
+}) {
+  const supabase = createClient()
+  const [nome, setNome] = useState(ex?.nome ?? '')
+  const [grupo, setGrupo] = useState(ex?.grupo ?? '')
+  const [series, setSeries] = useState(String(ex?.series ?? 3))
+  const [reps, setReps] = useState(ex?.reps ?? '10-12')
+  const [carga, setCarga] = useState(String(ex?.carga ?? 0))
+  const [descanso, setDescanso] = useState(String(ex?.descanso ?? 60))
+  const [ytId, setYtId] = useState(ex?.yt_id ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!nome.trim()) return
+    setSaving(true)
+    const updatePayload = {
+      nome: nome.trim(), grupo: grupo.trim() || null,
+      series: parseInt(series) || 3, reps,
+      carga: parseFloat(carga.replace(',', '.')) || 0,
+      descanso: parseInt(descanso) || 60,
+      yt_id: ytId.trim() || null,
+      tipo: 'forca',
+    }
+    let data: Exercicio | null = null
+    if (ex?.id) {
+      const res = await supabase.from('exercicios').update(updatePayload).eq('id', ex.id).select().single()
+      data = res.data
+    } else {
+      const res = await supabase.from('exercicios').insert({ ...updatePayload, ficha_id: fichaId, ordem: 999 }).select().single()
+      data = res.data
+    }
+    if (data) onSaved(data)
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', animation: 'fade-in 200ms ease' }}/>
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'var(--surface-1)', borderRadius: '24px 24px 0 0',
+        border: '1px solid var(--border)', borderBottom: 'none',
+        padding: '12px 0 32px', maxHeight: '85%', overflow: 'auto',
+        animation: 'slide-up 250ms cubic-bezier(.2,.7,.3,1)',
+      }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.18)', margin: '0 auto 16px' }}/>
+        <div style={{ padding: '0 20px 12px', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, letterSpacing: '-0.02em' }}>
+          {ex?.id ? 'Editar exercício' : 'Novo exercício'}
+        </div>
+        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[
+            { label: 'Nome', value: nome, set: setNome, placeholder: 'Ex: Supino reto com barra' },
+            { label: 'Grupo muscular', value: grupo, set: setGrupo, placeholder: 'Ex: Peito' },
+            { label: 'YouTube ID', value: ytId, set: setYtId, placeholder: 'Ex: rT7DgCr-3pg' },
+          ].map(({ label, value, set, placeholder }) => (
+            <div key={label}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 6 }}>{label}</div>
+              <input type="text" value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
+                style={{ width: '100%', height: 44, padding: '0 14px', background: 'var(--surface-2)', border: '1px solid var(--border-strong)', borderRadius: 12, color: 'var(--text)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+          ))}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+            {[
+              { label: 'Séries', value: series, set: setSeries, mode: 'numeric' as const },
+              { label: 'Reps', value: reps, set: setReps, mode: undefined },
+              { label: 'Carga kg', value: carga, set: setCarga, mode: 'decimal' as const },
+              { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' as const },
+            ].map(({ label, value, set, mode }) => (
+              <div key={label}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{label}</div>
+                <input type="text" inputMode={mode} value={value} onChange={e => set(e.target.value)}
+                  style={{ width: '100%', height: 40, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 14, background: 'var(--surface-3)', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer', border: 'none' }}>
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={saving || !nome.trim()} style={{
+              flex: 1, height: 48, borderRadius: 14,
+              background: 'var(--accent)', color: 'var(--accent-ink)',
+              fontWeight: 600, fontSize: 14, cursor: saving ? 'wait' : 'pointer',
+              border: 'none', opacity: saving || !nome.trim() ? 0.5 : 1,
+            }}>
+              {saving ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function Toast({ message }: { message: string }) {
+  return (
+    <div style={{
+      position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 90, whiteSpace: 'nowrap',
+      background: 'rgba(10,11,13,0.95)', border: '1px solid var(--border-strong)',
+      borderRadius: 999, padding: '10px 18px',
+      fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600,
+      color: 'var(--text)', letterSpacing: '0.04em',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+      animation: 'slide-up 220ms cubic-bezier(.2,.7,.3,1)',
+    }}>
+      {message}
+    </div>
+  )
+}
+
+// ── Main TreinoClient ──────────────────────────────────────────────────────────
+export default function TreinoClient({ ficha, exercicios, userId, historicoMap }: {
+  ficha: Ficha, exercicios: Exercicio[], userId: string,
+  historicoMap: Record<string, number[]>
+}) {
+  const router = useRouter()
+  const supabase = createClient()
+
+  const [exList, setExList] = useState(exercicios)
+  const [setsByEx, setSetsByEx] = useState<Record<string, SetState[]>>(() => {
+    const m: Record<string, SetState[]> = {}
+    for (const ex of exercicios) m[ex.id] = buildInitialSets(ex)
+    return m
+  })
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  const [restDuration, setRestDuration] = useState(0)
+  const [restKey, setRestKey] = useState(0)
+  const [videoEx, setVideoEx] = useState<Exercicio | null>(null)
+  const [editorEx, setEditorEx] = useState<Partial<Exercicio> | null>(null)
+  const [showNewEx, setShowNewEx] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const [finishing, setFinishing] = useState(false)
+
+  const startTimeRef = useRef(Date.now())
+  const [elapsedSec, setElapsedSec] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsedSec(Math.floor((Date.now() - startTimeRef.current) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(() => setToast(null), 2400)
+    return () => clearTimeout(id)
+  }, [toast])
+
+  const allSets = Object.values(setsByEx).flat()
+  const totalSets = allSets.length
+  const doneSets = allSets.filter(s => s.done).length
+  const progress = totalSets > 0 ? doneSets / totalSets : 0
+  const accent = ficha.cor ?? 'var(--accent)'
+
+  function toggleExpanded(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function updateSet(exId: string, idx: number, patch: Partial<SetState>) {
+    setSetsByEx(prev => {
+      const next = { ...prev, [exId]: prev[exId].map((s, i) => i === idx ? { ...s, ...patch } : s) }
+      if (patch.done) {
+        const allSetsDone = next[exId].every(s => s.done)
+        if (allSetsDone) {
+          setTimeout(() => setExpandedIds(p => { const n = new Set(p); n.delete(exId); return n }), 600)
+        }
+      }
+      return next
+    })
+    if (patch.done) setToast('Série marcada · descanso iniciado')
+  }
+
+  function startRest(sec: number) {
+    setRestDuration(sec)
+    setRestKey(k => k + 1)
+  }
+
+  async function finalizarTreino() {
+    setFinishing(true)
+    const durMin = Math.max(1, Math.round(elapsedSec / 60))
+    let volume = 0
+    for (const ex of exList) {
+      for (const s of setsByEx[ex.id] ?? []) {
+        if (s.done && (ex.tipo ?? 'forca') === 'forca') volume += s.carga * s.reps
+      }
+    }
+    const { data: treino } = await supabase.from('treinos').insert({
+      user_id: userId, ficha_id: ficha.id, ficha_letra: ficha.letra,
+      data: new Date().toISOString().split('T')[0],
+      duracao_min: durMin, volume_total: Math.round(volume),
+    }).select().single()
+
+    if (treino) {
+      const logs = exList.flatMap(ex => (setsByEx[ex.id] ?? []).map((s, i) => ({
+        treino_id: treino.id, exercicio_id: ex.id, exercicio_nome: ex.nome,
+        serie_num: i + 1, carga: s.carga, reps: (ex.tipo ?? 'forca') === 'forca' ? s.reps : null,
+        duracao_seg: ex.tipo === 'iso' ? s.duracaoSeg : null, done: s.done,
+      })))
+      if (logs.length > 0) await supabase.from('sets_log').insert(logs)
+
+      for (const ex of exList) {
+        const doneS = (setsByEx[ex.id] ?? []).filter(s => s.done)
+        if (doneS.length > 0 && (ex.tipo ?? 'forca') === 'forca') {
+          const avg = doneS.reduce((a, s) => a + s.carga, 0) / doneS.length
+          await supabase.from('exercicios').update({ carga: avg }).eq('id', ex.id)
+        }
+      }
+    }
+    router.push('/dashboard')
+    router.refresh()
+  }
+
+  const elMin = String(Math.floor(elapsedSec / 60)).padStart(2, '0')
+  const elSec = String(elapsedSec % 60).padStart(2, '0')
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+      {/* Header */}
+      <div style={{
+        padding: '14px 16px 10px', background: 'var(--bg-app)',
+        borderBottom: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          <button onClick={() => router.back()} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <Icon name="chevronLeft" size={18} color="var(--text)"/>
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}>{ficha.nome}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', marginTop: 2, letterSpacing: '0.08em' }}>
+              {elMin}:{elSec} · {doneSets}/{totalSets} séries
+            </div>
+          </div>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: `${accent}20`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14, color: accent,
+          }}>
+            {ficha.letra}
+          </div>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', borderRadius: 3, background: accent, width: `${progress * 100}%`, transition: 'width 400ms ease' }}/>
+        </div>
+      </div>
+
+      {/* Exercise list (scrollable) */}
+      <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', padding: '14px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {exList.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted)', fontSize: 14 }}>Nenhum exercício nessa ficha.</div>
+        ) : (
+          exList.map((ex, idx) => (
+            <ExerciseCard key={ex.id} ex={ex} idx={idx}
+              sets={setsByEx[ex.id] ?? []}
+              expanded={expandedIds.has(ex.id)}
+              accent={accent}
+              historico={historicoMap[ex.id] ?? []}
+              onToggleExpanded={() => toggleExpanded(ex.id)}
+              onUpdateSet={(i, patch) => updateSet(ex.id, i, patch)}
+              onAddSet={() => setSetsByEx(prev => { const last = prev[ex.id]?.slice(-1)[0]; return { ...prev, [ex.id]: [...(prev[ex.id] ?? []), { ...(last ?? { done: false, carga: 0, reps: 10, duracaoSeg: 30, duracaoMin: 10 }), done: false }] } })}
+              onRemoveSet={() => setSetsByEx(prev => { const cur = prev[ex.id] ?? []; if (cur.length <= 1) return prev; return { ...prev, [ex.id]: cur.slice(0, -1) } })}
+              onPlayVideo={() => setVideoEx(ex)}
+              onEdit={() => setEditorEx(ex)}
+              onStartRest={startRest}
+            />
+          ))
+        )}
+
+        {/* Novo exercício */}
+        <button onClick={() => setShowNewEx(true)} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          height: 48, borderRadius: 20, cursor: 'pointer',
+          background: 'transparent', border: '1px dashed var(--border-strong)',
+          color: 'var(--muted)', fontSize: 13, fontWeight: 600,
+        }}>
+          <Icon name="plus" size={16} color="var(--muted)"/>
+          Adicionar exercício
+        </button>
+      </div>
+
+      {/* Footer: RestTimer + Finalizar */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        {restDuration > 0 && (
+          <RestTimer key={restKey} duration={restDuration} accent={accent}
+            onDone={() => setRestDuration(0)}
+            onCancel={() => setRestDuration(0)}
+          />
+        )}
+        {doneSets > 0 && (
+          <div style={{ padding: `${restDuration > 0 ? 88 : 10}px 16px 16px`, background: 'linear-gradient(to top, var(--bg-app) 60%, transparent)', transition: 'padding 300ms' }}>
+            <button onClick={finalizarTreino} disabled={finishing} style={{
+              width: '100%', height: 56, borderRadius: 28,
+              background: accent, color: 'var(--accent-ink)',
+              fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em',
+              border: 'none', cursor: finishing ? 'wait' : 'pointer',
+              opacity: finishing ? 0.7 : 1,
+            }}>
+              {finishing ? 'Salvando…' : `Finalizar treino · ${Math.max(1, Math.round(elapsedSec / 60))}min`}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Overlays */}
+      {videoEx && <VideoModal ex={videoEx} onClose={() => setVideoEx(null)}/>}
+      {(showNewEx || editorEx) && (
+        <ExerciseEditor
+          ex={editorEx ?? {}}
+          fichaId={ficha.id}
+          onClose={() => { setEditorEx(null); setShowNewEx(false) }}
+          onSaved={saved => {
+            if (editorEx?.id) {
+              setExList(prev => prev.map(e => e.id === saved.id ? saved : e))
+            } else {
+              setExList(prev => [...prev, saved])
+              setSetsByEx(prev => ({ ...prev, [saved.id]: buildInitialSets(saved) }))
+            }
+            setEditorEx(null)
+            setShowNewEx(false)
+          }}
+        />
+      )}
+      {toast && <Toast message={toast}/>}
+    </div>
+  )
+}

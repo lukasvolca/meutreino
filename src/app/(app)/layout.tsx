@@ -1,27 +1,33 @@
-import BottomNav from '@/components/BottomNav'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import BottomNav from '@/components/BottomNav'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Verifica se o onboarding foi feito (perfil tem objetivo)
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('objetivo')
-    .eq('id', user.id)
-    .single()
-
-  // Se perfil não tem objetivo, onboarding incompleto
-  if (!profile?.objetivo) redirect('/onboarding')
-
   return (
-    <div className="h-full flex flex-col bg-app">
-      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: '4rem' }}>
+    <div style={{
+      position: 'relative',
+      margin: '0 auto',
+      maxWidth: 430,
+      height: '100dvh',
+      overflow: 'hidden',
+      background: 'var(--bg-app)',
+    }}>
+      {/* Scrollable content area */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'none',
+        scrollbarWidth: 'none',
+        paddingTop: 56,
+        paddingBottom: 86,
+      }}>
         {children}
-      </main>
+      </div>
       <BottomNav />
     </div>
   )

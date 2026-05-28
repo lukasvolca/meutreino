@@ -1,99 +1,133 @@
 import { createClient } from '@/lib/supabase/server'
+import ProgressoClient, { type ExercicioProgresso } from './ProgressoClient'
+
+function weekKey(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00')
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const mon = new Date(d)
+  mon.setDate(d.getDate() + diff)
+  return mon.toISOString().split('T')[0]
+}
 
 export default async function ProgressoPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: treinos } = await supabase
-    .from('treinos')
-    .select('*')
-    .eq('user_id', user!.id)
-    .order('data', { ascending: false })
-    .limit(30)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0]
 
-  const total = treinos?.length ?? 0
-  const volumeTotal = treinos?.reduce((a, t) => a + (t.volume_total ?? 0), 0) ?? 0
-  const prs = treinos?.filter(t => t.teve_pr).length ?? 0
-  const avgDur = total > 0
-    ? Math.round((treinos!.reduce((a, t) => a + (t.duracao_min ?? 0), 0)) / total)
-    : 0
+  const hoje = new Date().toISOString().split('T')[0]
+  const mesAtualStr = hoje.slice(0, 7)
 
-  // Últimas 8 semanas de volume
-  const weeklyData = buildWeeklyVolume(treinos ?? [])
+  const [{ data: fichas }, { data: treinos }] = await Promise.all([
+    supabase.from('fichas').select('id, letra').eq('user_id', user!.id).order('ordem'),
+    supabase.from('treinos').select('data, volume_total')
+      .eq('user_id', user!.id)
+      .gte('data', oneYearAgoStr)
+      .order('data', { ascending: true }),
+  ])
 
-  return (
-    <div className="px-4 pt-12 pb-4">
-      <h1 className="text-2xl font-bold tracking-tight mb-6">Progresso</h1>
+  const fichaIds = (fichas ?? []).map(f => f.id)
+  const fichaMap: Record<string, string> = {}
+  for (const f of fichas ?? []) fichaMap[f.id] = f.letra
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {[
-          { label: 'Treinos', value: total, unit: 'total' },
-          { label: 'Volume', value: (volumeTotal / 1000).toFixed(1), unit: 'toneladas' },
-          { label: 'PRs', value: prs, unit: 'recordes' },
-          { label: 'Duração média', value: avgDur, unit: 'min' },
-        ].map(({ label, value, unit }) => (
-          <div key={label} className="p-4 rounded-2xl"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-            <div className="text-xs font-mono font-semibold tracking-widest uppercase mb-1"
-              style={{ color: 'var(--muted-2)' }}>{label}</div>
-            <div className="text-2xl font-bold">{value}</div>
-            <div className="text-xs mt-0.5" style={{ color: 'var(--muted-2)' }}>{unit}</div>
-          </div>
-        ))}
-      </div>
+  const { data: exercicios } = fichaIds.length > 0
+    ? await supabase.from('exercicios').select('id, nome, grupo, ficha_id, tipo')
+        .in('ficha_id', fichaIds).order('ordem')
+    : { data: [] }
 
-      {/* Weekly volume bar chart */}
-      {weeklyData.length > 0 && (
-        <div className="p-4 rounded-2xl mb-4"
-          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <div className="text-xs font-mono font-semibold tracking-widest uppercase mb-4"
-            style={{ color: 'var(--muted-2)' }}>Volume semanal (kg)</div>
-          <MiniBarChart data={weeklyData} />
-        </div>
-      )}
+  const exIds = (exercicios ?? []).map(e => e.id)
 
-      {total === 0 && (
-        <div className="text-center py-8 text-sm" style={{ color: 'var(--muted)' }}>
-          Complete seu primeiro treino para ver o progresso.
-        </div>
-      )}
-    </div>
-  )
-}
+  const { data: setsLog } = exIds.length > 0
+    ? await supabase.from('sets_log')
+        .select('exercicio_id, carga, created_at')
+        .in('exercicio_id', exIds)
+        .eq('done', true)
+        .gt('carga', 0)
+        .gte('created_at', oneYearAgo.toISOString())
+        .order('created_at', { ascending: true })
+        .limit(exIds.length * 60)
+    : { data: [] }
 
-function buildWeeklyVolume(treinos: { data: string; volume_total: number }[]) {
-  const weeks: Record<string, number> = {}
-  for (const t of treinos) {
-    const d = new Date(t.data + 'T12:00:00')
-    const monday = new Date(d)
-    monday.setDate(d.getDate() - d.getDay() + 1)
-    const key = monday.toISOString().split('T')[0]
-    weeks[key] = (weeks[key] ?? 0) + (t.volume_total ?? 0)
+  // Group max carga by week per exercise
+  const weeklyMap: Record<string, Record<string, number[]>> = {}
+  for (const row of setsLog ?? []) {
+    if (!row.exercicio_id || !row.carga) continue
+    const week = weekKey(row.created_at.split('T')[0])
+    if (!weeklyMap[row.exercicio_id]) weeklyMap[row.exercicio_id] = {}
+    if (!weeklyMap[row.exercicio_id][week]) weeklyMap[row.exercicio_id][week] = []
+    weeklyMap[row.exercicio_id][week].push(row.carga)
   }
-  return Object.entries(weeks)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-8)
-    .map(([week, vol]) => ({ week, vol }))
-}
 
-function MiniBarChart({ data }: { data: { week: string; vol: number }[] }) {
-  const max = Math.max(...data.map(d => d.vol), 1)
+  const exercicioData: ExercicioProgresso[] = (exercicios ?? [])
+    .filter(e => e.tipo === 'forca')
+    .map(e => {
+      const weekly = weeklyMap[e.id] ?? {}
+      const historico = Object.entries(weekly)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([week, vals]) => ({ week, maxCarga: Math.max(...vals) }))
+      const pr = historico.length > 0 ? Math.max(...historico.map(h => h.maxCarga)) : 0
+      const first = historico[0]?.maxCarga ?? 0
+      return {
+        id: e.id,
+        nome: e.nome,
+        grupo: e.grupo ?? '',
+        ficha: fichaMap[e.ficha_id] ?? '?',
+        historico,
+        pr,
+        delta: pr - first,
+      }
+    })
+    .filter(e => e.historico.length > 0)
+
+  // Weekly volume for last 12 weeks
+  const volMap: Record<string, number> = {}
+  for (const t of treinos ?? []) {
+    const week = weekKey(t.data)
+    volMap[week] = (volMap[week] ?? 0) + (t.volume_total ?? 0)
+  }
+  // Build last 12 weeks including current (even if 0)
+  const weeklyVolume: { week: string; vol: number }[] = []
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i * 7)
+    const wk = weekKey(d.toISOString().split('T')[0])
+    weeklyVolume.push({ week: wk, vol: volMap[wk] ?? 0 })
+  }
+  // Deduplicate (same week may appear multiple times due to iteration)
+  const seenWeeks = new Set<string>()
+  const weeklyVolumeDeduped = weeklyVolume.filter(w => {
+    if (seenWeeks.has(w.week)) return false
+    seenWeeks.add(w.week)
+    return true
+  })
+
+  // Session stats
+  const treinosMes = (treinos ?? []).filter(t => t.data.startsWith(mesAtualStr)).length
+  const treinos12w = (treinos ?? []).filter(t => {
+    const d = new Date(t.data + 'T12:00:00')
+    const diff = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 7)
+    return diff <= 12
+  })
+  const freqSemanal = treinos12w.length / 12
+
+  if (exercicioData.length === 0) {
+    return (
+      <div style={{ padding: '56px 20px', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 36, letterSpacing: '-0.04em', marginBottom: 16 }}>Progresso</div>
+        <div style={{ color: 'var(--muted)', fontSize: 14 }}>Complete treinos para ver sua evolução de carga.</div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-end gap-1.5 h-24">
-      {data.map(({ week, vol }) => (
-        <div key={week} className="flex-1 flex flex-col items-center gap-1">
-          <div className="w-full rounded-t-sm transition-all"
-            style={{
-              height: `${Math.max(4, (vol / max) * 80)}px`,
-              background: 'var(--accent)',
-              opacity: 0.8,
-            }} />
-          <span className="text-[9px] font-mono" style={{ color: 'var(--muted-3)' }}>
-            {new Date(week + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-          </span>
-        </div>
-      ))}
-    </div>
+    <ProgressoClient
+      exercicios={exercicioData}
+      weeklyVolume={weeklyVolumeDeduped}
+      treinosMes={treinosMes}
+      freqSemanal={freqSemanal}
+    />
   )
 }

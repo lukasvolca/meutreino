@@ -25,14 +25,28 @@ export async function proxy(request: NextRequest) {
 
   const isAuth = !!user
   const path = request.nextUrl.pathname
-  const isPublicPath = path.startsWith('/login') || path.startsWith('/signup')
+  const isAuthPage = path.startsWith('/login') || path.startsWith('/signup')
+  const isOnboarding = path.startsWith('/onboarding')
 
-  if (!isAuth && !isPublicPath) {
+  if (!isAuth && !isAuthPage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (isAuth && isPublicPath) {
+  if (isAuth && isAuthPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Check onboarding completion for authenticated users
+  if (isAuth && !isAuthPage && !isOnboarding) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('objetivo')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.objetivo) {
+      return NextResponse.redirect(new URL('/onboarding', request.url))
+    }
   }
 
   return supabaseResponse

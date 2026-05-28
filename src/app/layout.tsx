@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import { Space_Grotesk, JetBrains_Mono } from 'next/font/google'
+import { Space_Grotesk, JetBrains_Mono, Bricolage_Grotesque } from 'next/font/google'
+import SwRegister from '@/components/SwRegister'
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
@@ -12,6 +13,12 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
+})
+
+const bricolageGrotesque = Bricolage_Grotesque({
+  variable: '--font-display',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
 })
 
 export const metadata: Metadata = {
@@ -31,8 +38,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full`}>
-      <body className="h-full bg-app text-white antialiased font-body">{children}</body>
+    <html lang="pt-BR" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${bricolageGrotesque.variable} h-full`}>
+      <body className="h-full bg-app text-white antialiased font-body">
+        <SwRegister/>
+        {children}
+      </body>
     </html>
   )
 }

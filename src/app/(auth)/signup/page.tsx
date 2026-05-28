@@ -33,7 +33,7 @@ export default function SignupPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="text-center mb-10">
-        <div className="text-4xl font-bold tracking-tight mb-1">
+        <div className="text-4xl font-bold tracking-tight mb-1" style={{ fontFamily: 'var(--font-display)' }}>
           <span style={{ color: 'var(--accent)' }}>Meu</span>Treino
         </div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>Crie sua conta gratuita</p>

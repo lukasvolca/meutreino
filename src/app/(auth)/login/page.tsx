@@ -27,7 +27,7 @@ export default function LoginPage() {
     <div className="w-full max-w-sm">
       {/* Logo */}
       <div className="text-center mb-10">
-        <div className="text-4xl font-bold tracking-tight mb-1">
+        <div className="text-4xl font-bold tracking-tight mb-1" style={{ fontFamily: 'var(--font-display)' }}>
           <span style={{ color: 'var(--accent)' }}>Meu</span>Treino
         </div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>Seu treino. Seu ritmo.</p>
