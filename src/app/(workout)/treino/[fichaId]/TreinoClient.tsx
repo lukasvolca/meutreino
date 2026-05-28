@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/icons'
 import { Sparkline } from '@/components/charts'
 import type { Database } from '@/lib/supabase/types'
+import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
 
 type Ficha = Database['public']['Tables']['fichas']['Row']
 type Exercicio = Database['public']['Tables']['exercicios']['Row']
@@ -581,6 +582,19 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const startTimeRef = useRef(Date.now())
   const [elapsedSec, setElapsedSec] = useState(0)
 
+  // Init/resume active session in localStorage
+  useEffect(() => {
+    const existing = getActiveSession()
+    if (existing?.fichaId === ficha.id) {
+      // Resume: restore start time so timer is continuous
+      startTimeRef.current = existing.startTime
+    } else {
+      const t = Date.now()
+      startTimeRef.current = t
+      setActiveSession({ fichaId: ficha.id, fichaLetra: ficha.letra ?? '', cor: ficha.cor ?? '', startTime: t })
+    }
+  }, []) // eslint-disable-line
+
   // Drag state
   const dragInfoRef = useRef<DragInfo | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -706,6 +720,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
 
   // ── Finalize ──────────────────────────────────────────────────────────────────
   async function finalizarTreino() {
+    clearActiveSession()
     setFinishing(true)
     const durMin = Math.max(1, Math.round(elapsedSec / 60))
     let volume = 0

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/icons'
 import { BarChart } from '@/components/charts'
+import DashboardHeroButton from './DashboardHeroButton'
 
 // Helper: get Monday-based week key (YYYY-MM-DD)
 function weekKey(dateStr: string) {
@@ -234,20 +235,12 @@ export default async function DashboardPage() {
             </div>
 
             <div style={{ padding: '0 14px 14px' }}>
-              <Link href={`/treino/${fichaHoje.id}`} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                width: '100%', height: 56, borderRadius: 28,
-                background: treinoHoje ? 'var(--surface-2)' : 'var(--accent)',
-                color: treinoHoje ? 'var(--accent)' : 'var(--accent-ink)',
-                border: treinoHoje ? '1px solid rgba(204,255,0,0.4)' : 'none',
-                fontFamily: 'var(--font-body)', fontSize: 15, fontWeight: 600,
-                letterSpacing: '-0.005em', textDecoration: 'none',
-              }}>
-                <Icon name={treinoHoje ? 'check' : 'play'} size={18} color="currentColor"/>
-                {treinoHoje
-                  ? `Treino concluído (${treinoHoje.duracao_min}min) · revisar`
-                  : 'Iniciar treino'}
-              </Link>
+              <DashboardHeroButton
+                fichaId={fichaHoje.id}
+                cor={fichaHoje.cor ?? 'var(--accent)'}
+                isCompleted={!!treinoHoje}
+                duracaoMin={treinoHoje?.duracao_min ?? null}
+              />
             </div>
           </div>
         </div>
