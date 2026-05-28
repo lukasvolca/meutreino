@@ -28,6 +28,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
   const [session, setSession] = useState<ActiveSession | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     const s = getActiveSession()
@@ -147,7 +148,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
             </button>
           )}
 
-          <button onClick={handleEnd} disabled={saving} style={{
+          <button onClick={() => setConfirmOpen(true)} disabled={saving} style={{
             flex: 1, height: 52, borderRadius: 26,
             background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-strong)',
             color: 'var(--muted)', cursor: saving ? 'wait' : 'pointer',
@@ -158,6 +159,46 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
             <Icon name="x" size={16} color="currentColor"/>
             {saving ? 'Salvando…' : 'Encerrar treino'}
           </button>
+
+          {/* Confirmation modal */}
+          {confirmOpen && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+              <div onClick={() => setConfirmOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}/>
+              <div style={{
+                position: 'relative', width: '100%', maxWidth: 480,
+                background: 'var(--surface-1)', borderRadius: '24px 24px 0 0',
+                border: '1px solid var(--border)', borderBottom: 'none',
+                padding: '28px 20px 40px',
+                animation: 'slide-up 240ms cubic-bezier(.2,.7,.3,1)',
+              }}>
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 22px' }}/>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em', marginBottom: 8 }}>
+                  Encerrar treino?
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>
+                  O tempo acumulado será salvo no histórico. Exercícios e séries não finalizados não serão registrados.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setConfirmOpen(false)} style={{
+                    flex: 1, height: 52, borderRadius: 26,
+                    background: 'var(--surface-3)', border: 'none',
+                    color: 'var(--muted)', fontFamily: 'var(--font-body)',
+                    fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    Cancelar
+                  </button>
+                  <button onClick={() => { setConfirmOpen(false); handleEnd() }} disabled={saving} style={{
+                    flex: 1, height: 52, borderRadius: 26,
+                    background: '#ff5e5e22', border: '1px solid #ff5e5e60',
+                    color: '#ff7b7b', fontFamily: 'var(--font-body)',
+                    fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                  }}>
+                    Sim, encerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
