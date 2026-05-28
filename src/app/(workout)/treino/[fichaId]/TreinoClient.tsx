@@ -141,9 +141,17 @@ function SetRow({ idx, set, tipo, accent, onToggle, onUpdate }: {
 }
 
 // ── ExerciseCard ───────────────────────────────────────────────────────────────
-function ExerciseCard({ ex, idx, sets, expanded, accent, historico, onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onStartRest }: {
+function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
+  isDragging, translateY, shiftY,
+  onDragHandleDown, cardRef,
+  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onStartRest,
+}: {
   ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
-  historico: number[], onToggleExpanded: () => void,
+  historico: number[],
+  isDragging: boolean, translateY: number, shiftY: number,
+  onDragHandleDown: (e: React.PointerEvent) => void,
+  cardRef: (el: HTMLDivElement | null) => void,
+  onToggleExpanded: () => void,
   onUpdateSet: (i: number, patch: Partial<SetState>) => void,
   onAddSet: () => void, onRemoveSet: () => void,
   onPlayVideo: () => void, onEdit: () => void,
@@ -155,6 +163,11 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico, onToggleExpa
   const isCardio = tipo === 'cardio'
   const isIso = tipo === 'iso'
 
+  // Delta from last historic carga
+  const prevCarga = historico.length > 0 ? historico[historico.length - 1] : null
+  const currentCarga = sets[0]?.carga ?? ex.carga
+  const delta = (prevCarga != null && !isCardio && !isIso) ? +(currentCarga - prevCarga).toFixed(1) : null
+
   let metaSummary: React.ReactNode
   if (isCardio) {
     metaSummary = <span>{ex.duracao_min}min{ex.intensidade ? ` · ${ex.intensidade}` : ''}</span>
@@ -162,15 +175,40 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico, onToggleExpa
     metaSummary = <span>{ex.series}×{ex.duracao_seg}s</span>
   } else {
     const lastCarga = sets[0]?.carga ?? ex.carga
-    metaSummary = <><span>{ex.series}×{ex.reps}</span><span style={{ color: 'var(--muted-3)' }}> · </span><span>{lastCarga}kg</span></>
+    metaSummary = (
+      <>
+        <span>{ex.series}×{ex.reps}</span>
+        <span style={{ color: 'var(--muted-3)' }}> · </span>
+        <span>{lastCarga}kg</span>
+        {delta != null && delta !== 0 && (
+          <>
+            <span style={{ color: 'var(--muted-3)' }}> · </span>
+            <span style={{ color: delta > 0 ? '#6dffb0' : '#ff5e5e', fontWeight: 700 }}>
+              {delta > 0 ? '+' : ''}{delta}
+            </span>
+          </>
+        )}
+      </>
+    )
   }
 
+  const transform = `translateY(${translateY + shiftY}px)`
+
   return (
-    <div style={{
-      background: 'var(--surface-1)',
-      border: `1px solid ${allDone ? `${accent}40` : 'var(--border)'}`,
-      borderRadius: 20, overflow: 'hidden', transition: 'border-color 200ms', position: 'relative',
-    }}>
+    <div
+      ref={cardRef}
+      style={{
+        background: 'var(--surface-1)',
+        border: `1px solid ${allDone ? `${accent}40` : 'var(--border)'}`,
+        borderRadius: 20, overflow: 'hidden', transition: isDragging ? 'none' : 'border-color 200ms, transform 180ms',
+        position: 'relative',
+        transform,
+        zIndex: isDragging ? 50 : 1,
+        opacity: isDragging ? 0.96 : 1,
+        boxShadow: isDragging ? '0 12px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3)' : 'none',
+        willChange: isDragging ? 'transform' : undefined,
+      }}
+    >
       {allDone && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, boxShadow: `0 0 12px ${accent}` }}/>}
 
       {/* Header */}
@@ -178,7 +216,16 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico, onToggleExpa
         padding: '12px 14px 12px 8px', display: 'flex', alignItems: 'center', gap: 8,
         cursor: 'pointer', userSelect: 'none',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-3)', cursor: 'grab', padding: '4px 2px' }}>
+        {/* Drag handle — captures pointer events, stops card expand/collapse */}
+        <div
+          onPointerDown={e => { e.stopPropagation(); onDragHandleDown(e) }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--muted-3)', cursor: 'grab', padding: '4px 4px',
+            touchAction: 'none',
+          }}
+        >
           <Icon name="drag" size={16} color="var(--muted-3)"/>
         </div>
         <div style={{
@@ -499,6 +546,14 @@ function Toast({ message }: { message: string }) {
   )
 }
 
+// ── Drag state types ───────────────────────────────────────────────────────────
+interface DragInfo {
+  id: string
+  srcIdx: number
+  startClientY: number
+  draggedHeight: number // card height at drag start
+}
+
 // ── Main TreinoClient ──────────────────────────────────────────────────────────
 export default function TreinoClient({ ficha, exercicios, userId, historicoMap }: {
   ficha: Ficha, exercicios: Exercicio[], userId: string,
@@ -526,6 +581,13 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const startTimeRef = useRef(Date.now())
   const [elapsedSec, setElapsedSec] = useState(0)
 
+  // Drag state
+  const dragInfoRef = useRef<DragInfo | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragDeltaY, setDragDeltaY] = useState(0)
+  const [dragTargetIdx, setDragTargetIdx] = useState<number | null>(null)
+  const cardElMap = useRef<Map<string, HTMLDivElement>>(new Map())
+
   useEffect(() => {
     const id = setInterval(() => setElapsedSec(Math.floor((Date.now() - startTimeRef.current) / 1000)), 1000)
     return () => clearInterval(id)
@@ -542,6 +604,13 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const doneSets = allSets.filter(s => s.done).length
   const progress = totalSets > 0 ? doneSets / totalSets : 0
   const accent = ficha.cor ?? 'var(--accent)'
+
+  const doneExCount = exList.filter(ex => {
+    const sets = setsByEx[ex.id] ?? []
+    return sets.length > 0 && sets.every(s => s.done)
+  }).length
+
+  const gruposList = [...new Set(exList.map(e => e.grupo).filter(Boolean))].join(' · ')
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -570,6 +639,72 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
     setRestKey(k => k + 1)
   }
 
+  // ── Drag handlers ────────────────────────────────────────────────────────────
+  function handleDragHandleDown(id: string, e: React.PointerEvent) {
+    const el = cardElMap.current.get(id)
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const srcIdx = exList.findIndex(ex => ex.id === id)
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragInfoRef.current = {
+      id, srcIdx,
+      startClientY: e.clientY,
+      draggedHeight: rect.height,
+    }
+    setDragId(id)
+    setDragDeltaY(0)
+    setDragTargetIdx(srcIdx)
+  }
+
+  function computeTargetIdx(pointerClientY: number, srcIdx: number): number {
+    let target = srcIdx
+    for (let i = 0; i < exList.length; i++) {
+      const el = cardElMap.current.get(exList[i].id)
+      if (!el) continue
+      const rect = el.getBoundingClientRect()
+      // Use natural rect — during drag the dragged card is translated, but others aren't yet
+      const mid = rect.top + rect.height / 2
+      if (pointerClientY < mid) {
+        target = i
+        break
+      }
+      target = i
+    }
+    return target
+  }
+
+  function handleListPointerMove(e: React.PointerEvent) {
+    const info = dragInfoRef.current
+    if (!info) return
+    const delta = e.clientY - info.startClientY
+    setDragDeltaY(delta)
+    const t = computeTargetIdx(e.clientY, info.srcIdx)
+    setDragTargetIdx(t)
+  }
+
+  async function handleListPointerUp(e: React.PointerEvent) {
+    const info = dragInfoRef.current
+    if (!info) { setDragId(null); return }
+    dragInfoRef.current = null
+
+    const targetIdx = dragTargetIdx ?? info.srcIdx
+    setDragId(null)
+    setDragDeltaY(0)
+    setDragTargetIdx(null)
+
+    if (info.srcIdx !== targetIdx) {
+      const newList = [...exList]
+      const [moved] = newList.splice(info.srcIdx, 1)
+      newList.splice(targetIdx, 0, moved)
+      setExList(newList)
+      // Persist order to Supabase
+      await Promise.all(newList.map((ex, i) =>
+        supabase.from('exercicios').update({ ordem: i }).eq('id', ex.id)
+      ))
+    }
+  }
+
+  // ── Finalize ──────────────────────────────────────────────────────────────────
   async function finalizarTreino() {
     setFinishing(true)
     const durMin = Math.max(1, Math.round(elapsedSec / 60))
@@ -610,58 +745,125 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{
-        padding: '14px 16px 10px', background: 'var(--bg-app)',
+        padding: '12px 16px 14px', background: 'var(--bg-app)',
         borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        {/* Top bar: back · status label · timer pill */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <button onClick={() => router.back()} style={{
-            width: 36, height: 36, borderRadius: 10,
+            width: 34, height: 34, borderRadius: 10,
             background: 'var(--surface-2)', border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
           }}>
             <Icon name="chevronLeft" size={18} color="var(--text)"/>
           </button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}>{ficha.nome}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', marginTop: 2, letterSpacing: '0.08em' }}>
-              {elMin}:{elSec} · {doneSets}/{totalSets} séries
-            </div>
+          <div style={{ flex: 1, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--muted-2)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            FICHA {ficha.letra} · EM ANDAMENTO
           </div>
           <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: `${accent}20`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14, color: accent,
+            display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+            padding: '5px 10px', borderRadius: 999,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
           }}>
-            {ficha.letra}
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}` }}/>
+            {elMin}:{elSec}
           </div>
         </div>
-        <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: 3, background: accent, width: `${progress * 100}%`, transition: 'width 400ms ease' }}/>
+
+        {/* Ficha identity row: icon + name + groups */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 16, flexShrink: 0,
+            background: `${accent}1a`, border: `1px solid ${accent}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="dumbbell" size={26} color={accent}/>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{ficha.nome}</div>
+            {gruposList && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {gruposList}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Progress row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', letterSpacing: '0.1em', fontWeight: 600 }}>
+            PROGRESSO · {doneExCount}/{exList.length} EXERCÍCIOS
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: accent }}>
+            {Math.round(progress * 100)}%
+          </div>
+        </div>
+        <div style={{ height: 5, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: 3, background: accent,
+            width: `${progress * 100}%`, transition: 'width 400ms ease',
+            boxShadow: progress > 0 ? `0 0 8px ${accent}60` : 'none',
+          }}/>
         </div>
       </div>
 
-      {/* Exercise list (scrollable) */}
-      <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', padding: '14px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ── Exercise list (scrollable) ── */}
+      <div
+        style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', padding: '14px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}
+        onPointerMove={dragId ? handleListPointerMove : undefined}
+        onPointerUp={dragId ? handleListPointerUp : undefined}
+        onPointerCancel={dragId ? handleListPointerUp : undefined}
+      >
         {exList.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted)', fontSize: 14 }}>Nenhum exercício nessa ficha.</div>
         ) : (
-          exList.map((ex, idx) => (
-            <ExerciseCard key={ex.id} ex={ex} idx={idx}
-              sets={setsByEx[ex.id] ?? []}
-              expanded={expandedIds.has(ex.id)}
-              accent={accent}
-              historico={historicoMap[ex.id] ?? []}
-              onToggleExpanded={() => toggleExpanded(ex.id)}
-              onUpdateSet={(i, patch) => updateSet(ex.id, i, patch)}
-              onAddSet={() => setSetsByEx(prev => { const last = prev[ex.id]?.slice(-1)[0]; return { ...prev, [ex.id]: [...(prev[ex.id] ?? []), { ...(last ?? { done: false, carga: 0, reps: 10, duracaoSeg: 30, duracaoMin: 10 }), done: false }] } })}
-              onRemoveSet={() => setSetsByEx(prev => { const cur = prev[ex.id] ?? []; if (cur.length <= 1) return prev; return { ...prev, [ex.id]: cur.slice(0, -1) } })}
-              onPlayVideo={() => setVideoEx(ex)}
-              onEdit={() => setEditorEx(ex)}
-              onStartRest={startRest}
-            />
-          ))
+          exList.map((ex, idx) => {
+            const isDragging = dragId === ex.id
+            const info = dragInfoRef.current
+            let translateY = 0
+            let shiftY = 0
+
+            if (isDragging) {
+              translateY = dragDeltaY
+            } else if (dragId && info && dragTargetIdx !== null) {
+              const srcIdx = info.srcIdx
+              const draggedH = info.draggedHeight + 12 // card height + gap
+              if (srcIdx < dragTargetIdx) {
+                // dragging down: cards between src+1..target shift up
+                if (idx > srcIdx && idx <= dragTargetIdx) shiftY = -draggedH
+              } else if (srcIdx > dragTargetIdx) {
+                // dragging up: cards between target..src-1 shift down
+                if (idx >= dragTargetIdx && idx < srcIdx) shiftY = draggedH
+              }
+            }
+
+            return (
+              <ExerciseCard key={ex.id} ex={ex} idx={idx}
+                sets={setsByEx[ex.id] ?? []}
+                expanded={expandedIds.has(ex.id)}
+                accent={accent}
+                historico={historicoMap[ex.id] ?? []}
+                isDragging={isDragging}
+                translateY={translateY}
+                shiftY={shiftY}
+                onDragHandleDown={e => handleDragHandleDown(ex.id, e)}
+                cardRef={el => {
+                  if (el) cardElMap.current.set(ex.id, el)
+                  else cardElMap.current.delete(ex.id)
+                }}
+                onToggleExpanded={() => toggleExpanded(ex.id)}
+                onUpdateSet={(i, patch) => updateSet(ex.id, i, patch)}
+                onAddSet={() => setSetsByEx(prev => { const last = prev[ex.id]?.slice(-1)[0]; return { ...prev, [ex.id]: [...(prev[ex.id] ?? []), { ...(last ?? { done: false, carga: 0, reps: 10, duracaoSeg: 30, duracaoMin: 10 }), done: false }] } })}
+                onRemoveSet={() => setSetsByEx(prev => { const cur = prev[ex.id] ?? []; if (cur.length <= 1) return prev; return { ...prev, [ex.id]: cur.slice(0, -1) } })}
+                onPlayVideo={() => setVideoEx(ex)}
+                onEdit={() => setEditorEx(ex)}
+                onStartRest={startRest}
+              />
+            )
+          })
         )}
 
         {/* Novo exercício */}
@@ -676,7 +878,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         </button>
       </div>
 
-      {/* Footer: RestTimer + Finalizar */}
+      {/* ── Footer: RestTimer + Finalizar ── */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
         {restDuration > 0 && (
           <RestTimer key={restKey} duration={restDuration} accent={accent}
@@ -699,7 +901,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         )}
       </div>
 
-      {/* Overlays */}
+      {/* ── Overlays ── */}
       {videoEx && <VideoModal ex={videoEx} onClose={() => setVideoEx(null)}/>}
       {(showNewEx || editorEx) && (
         <ExerciseEditor
