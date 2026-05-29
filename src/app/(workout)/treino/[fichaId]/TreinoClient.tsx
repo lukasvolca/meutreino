@@ -581,17 +581,16 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
 
   const startTimeRef = useRef(Date.now())
   const [elapsedSec, setElapsedSec] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
 
-  // Init/resume active session in localStorage
+  // Init active session — preserve pause state instead of auto-resuming
   useEffect(() => {
     const existing = getActiveSession()
     if (existing?.fichaId === ficha.id) {
       if (existing.pausedAt) {
-        // Was paused on dashboard — resume: adjust startTime, clear pausedAt
-        const pausedElapsed = existing.pausedAt - existing.startTime
-        const newStart = Date.now() - pausedElapsed
-        startTimeRef.current = newStart
-        setActiveSession({ ...existing, startTime: newStart, pausedAt: undefined })
+        startTimeRef.current = existing.startTime
+        setElapsedSec(Math.floor((existing.pausedAt - existing.startTime) / 1000))
+        setIsPaused(true)
       } else {
         startTimeRef.current = existing.startTime
       }
@@ -610,9 +609,10 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const cardElMap = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
+    if (isPaused) return
     const id = setInterval(() => setElapsedSec(Math.floor((Date.now() - startTimeRef.current) / 1000)), 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isPaused])
 
   useEffect(() => {
     if (!toast) return
@@ -725,6 +725,26 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
     }
   }
 
+  // ── Pause / Resume ────────────────────────────────────────────────────────────
+  function pauseTreino() {
+    const session = getActiveSession()
+    if (!session) return
+    const now = Date.now()
+    setActiveSession({ ...session, pausedAt: now })
+    setElapsedSec(Math.floor((now - session.startTime) / 1000))
+    setIsPaused(true)
+  }
+
+  function resumeTreino() {
+    const session = getActiveSession()
+    if (!session) return
+    const pausedElapsed = (session.pausedAt ?? Date.now()) - session.startTime
+    const newStart = Date.now() - pausedElapsed
+    startTimeRef.current = newStart
+    setActiveSession({ ...session, startTime: newStart, pausedAt: undefined })
+    setIsPaused(false)
+  }
+
   // ── Finalize ──────────────────────────────────────────────────────────────────
   async function finalizarTreino() {
     clearActiveSession()
@@ -781,18 +801,24 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
           }}>
             <Icon name="chevronLeft" size={18} color="var(--text)"/>
           </button>
-          <div style={{ flex: 1, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--muted-2)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            FICHA {ficha.letra} · EM ANDAMENTO
+          <div style={{ flex: 1, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: isPaused ? 'var(--warn)' : 'var(--muted-2)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            FICHA {ficha.letra} · {isPaused ? 'PAUSADO' : 'EM ANDAMENTO'}
           </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-            padding: '5px 10px', borderRadius: 999,
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
-          }}>
-            <div style={{ width: 7, height: 7, borderRadius: '50%', background: accent, boxShadow: `0 0 8px ${accent}` }}/>
+          <button
+            onClick={isPaused ? resumeTreino : pauseTreino}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+              padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
+              background: isPaused ? 'rgba(255,181,71,0.12)' : 'var(--surface-2)',
+              border: `1px solid ${isPaused ? 'rgba(255,181,71,0.4)' : 'var(--border)'}`,
+              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em',
+              color: isPaused ? 'var(--warn)' : 'var(--text)',
+              transition: 'all 180ms',
+            }}
+          >
+            <Icon name={isPaused ? 'play' : 'pause'} size={12} color="currentColor"/>
             {elMin}:{elSec}
-          </div>
+          </button>
         </div>
 
         {/* Ficha identity row: icon + name + groups */}
