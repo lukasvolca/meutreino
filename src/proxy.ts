@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
       // If already logged in with trainer/admin role, skip login
       if (isAuth) {
         const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-        if (p?.role === 'admin' || p?.role === 'trainer') {
+        if (['admin', 'trainer', 'nutritionist'].includes(p?.role ?? '')) {
           return NextResponse.redirect(new URL('/admin', request.url))
         }
       }
@@ -49,11 +49,11 @@ export async function proxy(request: NextRequest) {
     const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     const role = p?.role ?? 'user'
 
-    if (role === 'trainer_pending' && !isAdminPendingPage) {
+    if ((role === 'trainer_pending' || role === 'nutritionist_pending') && !isAdminPendingPage) {
       return NextResponse.redirect(new URL('/admin/pendente', request.url))
     }
 
-    if (role !== 'admin' && role !== 'trainer' && role !== 'trainer_pending') {
+    if (!['admin', 'trainer', 'nutritionist', 'trainer_pending', 'nutritionist_pending'].includes(role)) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
 
