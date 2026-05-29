@@ -9,6 +9,7 @@ export interface Database {
           nome: string
           objetivo: string | null
           streak: number
+          role: string
           created_at: string
           updated_at: string
         }
@@ -24,6 +25,7 @@ export interface Database {
           nome?: string
           objetivo?: string | null
           streak?: number
+          role?: string
           updated_at?: string
         }
         Relationships: []
@@ -172,6 +174,29 @@ export interface Database {
           reps?: number | null
           duracao_seg?: number | null
           done?: boolean
+        }
+        Relationships: []
+      }
+      trainer_student_links: {
+        Row: {
+          id: string
+          trainer_id: string
+          student_id: string
+          status: string
+          requested_at: string
+          approved_at: string | null
+        }
+        Insert: {
+          id?: string
+          trainer_id: string
+          student_id: string
+          status?: string
+          requested_at?: string
+          approved_at?: string | null
+        }
+        Update: {
+          status?: string
+          approved_at?: string | null
         }
         Relationships: []
       }

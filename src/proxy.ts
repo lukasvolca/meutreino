@@ -25,9 +25,42 @@ export async function proxy(request: NextRequest) {
 
   const isAuth = !!user
   const path = request.nextUrl.pathname
+  const isAdminPath = path.startsWith('/admin')
+  const isAdminAuthPage = path === '/admin/login' || path === '/admin/signup'
+  const isAdminPendingPage = path === '/admin/pendente'
   const isAuthPage = path.startsWith('/login') || path.startsWith('/signup')
   const isOnboarding = path.startsWith('/onboarding')
 
+  // ── Admin routes ────────────────────────────────────────────────────────────
+  if (isAdminPath) {
+    if (isAdminAuthPage) {
+      // If already logged in with trainer/admin role, skip login
+      if (isAuth) {
+        const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        if (p?.role === 'admin' || p?.role === 'trainer') {
+          return NextResponse.redirect(new URL('/admin', request.url))
+        }
+      }
+      return supabaseResponse
+    }
+
+    if (!isAuth) return NextResponse.redirect(new URL('/admin/login', request.url))
+
+    const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const role = p?.role ?? 'user'
+
+    if (role === 'trainer_pending' && !isAdminPendingPage) {
+      return NextResponse.redirect(new URL('/admin/pendente', request.url))
+    }
+
+    if (role !== 'admin' && role !== 'trainer' && role !== 'trainer_pending') {
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+
+    return supabaseResponse
+  }
+
+  // ── Regular app routes ───────────────────────────────────────────────────────
   if (!isAuth && !isAuthPage) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -36,15 +69,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Check onboarding completion for authenticated users
   if (isAuth && !isAuthPage && !isOnboarding) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('objetivo')
+      .select('objetivo, role')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.objetivo) {
+    // Skip onboarding for admin/trainer accounts
+    const role = (profile as { objetivo?: string | null; role?: string } | null)?.role ?? 'user'
+    if (!profile?.objetivo && role === 'user') {
       return NextResponse.redirect(new URL('/onboarding', request.url))
     }
   }
