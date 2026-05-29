@@ -28,6 +28,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 type AddModalState = { type: 'trainer' | 'nutritionist' } | null
 type EditModalState = { prof: Professional } | null
+type AddStudentModalState = { trainerId: string } | null
 
 export default function AdminDashboard({ myProfile, pendingProfessionals, trainers, nutritionists, students }: Props) {
   const router = useRouter()
@@ -52,11 +53,20 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<Professional | null>(null)
 
-  // Student link request
+  // Student link request (trainer form)
   const [linkEmail, setLinkEmail] = useState('')
   const [linkLoading, setLinkLoading] = useState(false)
   const [linkError, setLinkError] = useState('')
   const [linkSuccess, setLinkSuccess] = useState('')
+
+  // Add student modal
+  const [addStudentModal, setAddStudentModal] = useState<AddStudentModalState>(null)
+  const [addStudentEmail, setAddStudentEmail] = useState('')
+  const [addStudentResult, setAddStudentResult] = useState<{ id: string; nome: string } | null>(null)
+  const [addStudentSearched, setAddStudentSearched] = useState(false)
+  const [addStudentLoading, setAddStudentLoading] = useState(false)
+  const [addStudentError, setAddStudentError] = useState('')
+  const [addStudentTrainerId, setAddStudentTrainerId] = useState('')
 
   async function logout() {
     await supabase.auth.signOut()
@@ -177,6 +187,57 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
       setLinkEmail('')
     }
     setLinkLoading(false)
+  }
+
+  // ── Add student modal ─────────────────────────────────────────────────────────
+  function openAddStudent(trainerId?: string) {
+    setAddStudentModal({ trainerId: trainerId ?? myProfile.id })
+    setAddStudentEmail('')
+    setAddStudentResult(null)
+    setAddStudentSearched(false)
+    setAddStudentError('')
+    setAddStudentTrainerId(trainerId ?? myProfile.id)
+  }
+
+  async function searchStudentUser() {
+    if (!addStudentEmail.trim()) return
+    setAddStudentLoading(true)
+    setAddStudentError('')
+    setAddStudentResult(null)
+    setAddStudentSearched(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any).rpc('get_profile_by_email', { email_input: addStudentEmail.trim() })
+    const found = Array.isArray(data) ? data[0] : data
+    setAddStudentSearched(true)
+    if (!found) { setAddStudentError('Nenhum usuário encontrado com esse e-mail.'); setAddStudentLoading(false); return }
+    if (['trainer', 'nutritionist', 'admin', 'trainer_pending', 'nutritionist_pending'].includes(found.role)) {
+      setAddStudentError(`${found.nome} é um profissional e não pode ser adicionado como aluno.`)
+      setAddStudentLoading(false); return
+    }
+    const alreadyLinked = students.some(s => s.id === found.id && (s.status === 'approved' || s.status === 'pending_link'))
+    if (alreadyLinked) { setAddStudentError(`${found.nome} já está vinculado ou tem solicitação pendente.`); setAddStudentLoading(false); return }
+    setAddStudentResult({ id: found.id, nome: found.nome })
+    setAddStudentLoading(false)
+  }
+
+  async function confirmAddStudent() {
+    if (!addStudentResult) return
+    setAddStudentLoading(true)
+    const tid = isAdmin ? addStudentTrainerId : myProfile.id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('trainer_student_links').insert({
+      trainer_id: tid,
+      student_id: addStudentResult.id,
+      status: 'approved',
+      approved_at: new Date().toISOString(),
+    })
+    if (error) {
+      setAddStudentError(error.code === '23505' ? 'Esse aluno já está vinculado.' : error.message)
+    } else {
+      setAddStudentModal(null)
+    }
+    setAddStudentLoading(false)
+    router.refresh()
   }
 
   const approvedStudents = students.filter(s => s.status === 'approved')
@@ -334,11 +395,14 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
         )}
 
         {/* Approved students */}
-        <Section title={`Meus alunos (${approvedStudents.length})`}>
+        <Section
+          title={`Meus alunos (${approvedStudents.length})`}
+          action={{ label: '+ Adicionar aluno', onClick: () => openAddStudent() }}
+        >
           {approvedStudents.length === 0
             ? <EmptyRow text="Nenhum aluno vinculado ainda." />
             : approvedStudents.map(s => (
-              <Link key={s.id} href={`/admin/alunos/${s.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <Link key={`${s.id}-${s.linkId}`} href={`/admin/alunos/${s.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <ProfRow hoverable>
                   <Avatar name={s.nome} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -455,6 +519,83 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
               {editLoading ? 'Salvando…' : 'Salvar'}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* ── Add student modal ────────────────────────────────────────────────── */}
+      {addStudentModal && (
+        <Modal title="Adicionar aluno" onClose={() => setAddStudentModal(null)}>
+          <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 18 }}>
+            Digite o e-mail do usuário cadastrado no MeuTreino para adicioná-lo como aluno.
+          </p>
+
+          {isAdmin && trainers.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>
+                Personal trainer
+              </label>
+              <select
+                value={addStudentTrainerId}
+                onChange={e => setAddStudentTrainerId(e.target.value)}
+                style={{
+                  width: '100%', height: 42, borderRadius: 10, padding: '0 12px',
+                  background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+                  color: 'var(--text)', fontSize: 14, outline: 'none', cursor: 'pointer',
+                }}
+              >
+                {trainers.map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <input
+              type="email" placeholder="E-mail do aluno" value={addStudentEmail}
+              onChange={e => { setAddStudentEmail(e.target.value); setAddStudentSearched(false); setAddStudentResult(null); setAddStudentError('') }}
+              onKeyDown={e => e.key === 'Enter' && searchStudentUser()}
+              style={{
+                flex: 1, height: 42, borderRadius: 10, padding: '0 12px',
+                background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+                color: 'var(--text)', fontSize: 14, outline: 'none',
+              }}
+            />
+            <button onClick={searchStudentUser} disabled={addStudentLoading || !addStudentEmail.trim()} style={{
+              height: 42, padding: '0 16px', borderRadius: 10,
+              background: 'var(--surface-3)', border: '1px solid var(--border-strong)',
+              color: 'var(--text)', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              opacity: addStudentLoading ? 0.5 : 1,
+            }}>
+              {addStudentLoading ? '…' : 'Buscar'}
+            </button>
+          </div>
+
+          {addStudentError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '0 0 12px' }}>{addStudentError}</p>}
+
+          {addStudentResult && (
+            <div style={{
+              padding: '14px 16px', borderRadius: 12, marginBottom: 16,
+              background: 'rgba(109,255,176,0.06)', border: '1px solid rgba(109,255,176,0.25)',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <Avatar name={addStudentResult.nome} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{addStudentResult.nome}</div>
+                <div style={{ fontSize: 12, color: 'var(--ok)' }}>Usuário encontrado</div>
+              </div>
+            </div>
+          )}
+
+          {addStudentResult && (
+            <button onClick={confirmAddStudent} disabled={addStudentLoading} style={{
+              width: '100%', height: 46, borderRadius: 12, fontWeight: 700, fontSize: 14,
+              background: 'var(--accent)', color: 'var(--accent-ink)', border: 0, cursor: 'pointer',
+              opacity: addStudentLoading ? 0.5 : 1,
+            }}>
+              {addStudentLoading ? 'Adicionando…' : 'Adicionar aluno'}
+            </button>
+          )}
         </Modal>
       )}
 

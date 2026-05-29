@@ -37,21 +37,22 @@ export default async function AdminPage() {
     trainers = ((allProfs ?? []) as Professional[]).filter(p => p.role === 'trainer')
     nutritionists = ((allProfs ?? []) as Professional[]).filter(p => p.role === 'nutritionist')
 
-    // Pending student link requests
+    // All student links (pending approval + approved)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: pendingLinks } = await (supabase as any)
+    const { data: allLinks } = await (supabase as any)
       .from('trainer_student_links')
-      .select('id, trainer_id, student_id, profiles!trainer_student_links_student_id_fkey(nome, objetivo)')
-      .eq('status', 'pending')
+      .select('id, trainer_id, student_id, status, profiles!trainer_student_links_student_id_fkey(nome, objetivo)')
+      .in('status', ['pending', 'approved'])
+      .order('requested_at')
 
-    myStudents = ((pendingLinks ?? []) as Array<{
-      id: string; trainer_id: string; student_id: string
+    myStudents = ((allLinks ?? []) as Array<{
+      id: string; trainer_id: string; student_id: string; status: string
       profiles: { nome: string; objetivo: string | null } | null
     }>).map(l => ({
       id: l.student_id,
       nome: l.profiles?.nome ?? '—',
       objetivo: l.profiles?.objetivo ?? null,
-      status: 'pending_link',
+      status: l.status === 'pending' ? 'pending_link' : 'approved',
       linkId: l.id,
       trainerId: l.trainer_id,
     }))
