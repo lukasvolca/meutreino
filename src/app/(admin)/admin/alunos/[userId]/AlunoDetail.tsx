@@ -11,8 +11,16 @@ type Ficha = {
   exercicios: { count: number }[]
 }
 
-const COR_PRESETS = ['#CCFF00', '#00E5FF', '#FF5E1F', '#FF3B5C', '#A78BFA', '#34D399']
+const COR_PRESETS = [
+  '#CCFF00', '#00E5FF', '#FF5E1F', '#FF3B5C', '#A78BFA', '#34D399',
+  '#FACC15', '#F472B6', '#60A5FA', '#FB923C', '#A3E635', '#E879F9',
+]
 const LETRAS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const ICONES = [
+  '💪', '🏋️', '🔥', '⚡', '🎯', '🏃', '🦵', '🤸', '🧘', '🚴',
+  '🥊', '🏆', '🌟', '💯', '⚽', '🏊', '🧗', '🤼', '🏇', '🎽',
+  '🦾', '🧠', '❤️', '🫀', '🌊', '🏔️', '🎪', '🎖️', '🩺', '🥗',
+]
 const OBJETIVOS: Record<string, string> = {
   hipertrofia: 'Hipertrofia', emagrecimento: 'Emagrecimento',
   forca: 'Força', condicionamento: 'Condicionamento',
@@ -36,6 +44,7 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
   const [fichaNome, setFichaNome] = useState('')
   const [fichaLetra, setFichaLetra] = useState('')
   const [fichaCor, setFichaCor] = useState(COR_PRESETS[0])
+  const [fichaIcone, setFichaIcone] = useState<string>('')
   const [fichaDuracao, setFichaDuracao] = useState(60)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -50,6 +59,7 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
     setFichaNome('')
     setFichaLetra(proxima)
     setFichaCor(COR_PRESETS[fichas.length % COR_PRESETS.length])
+    setFichaIcone('')
     setFichaDuracao(60)
     setModalOpen(true)
   }
@@ -59,6 +69,7 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
     setFichaNome(f.nome)
     setFichaLetra(f.letra)
     setFichaCor(f.cor)
+    setFichaIcone(f.icone ?? '')
     setFichaDuracao(f.duracao_min)
     setModalOpen(true)
   }
@@ -66,9 +77,10 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
   async function saveFicha() {
     if (!fichaNome.trim() || !fichaLetra) return
     setSaving(true)
+    const iconeVal = fichaIcone.trim() || null
     if (editFicha) {
       const { data } = await supabase.from('fichas')
-        .update({ nome: fichaNome.trim(), letra: fichaLetra.toUpperCase(), cor: fichaCor, duracao_min: fichaDuracao })
+        .update({ nome: fichaNome.trim(), letra: fichaLetra.toUpperCase(), cor: fichaCor, icone: iconeVal, duracao_min: fichaDuracao })
         .eq('id', editFicha.id)
         .select('id, letra, nome, cor, icone, duracao_min, ordem, exercicios(count)')
         .single()
@@ -80,6 +92,7 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
           nome: fichaNome.trim(),
           letra: fichaLetra.toUpperCase(),
           cor: fichaCor,
+          icone: iconeVal,
           duracao_min: fichaDuracao,
           ordem: fichas.length,
         })
@@ -170,9 +183,10 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
                     width: 44, height: 44, borderRadius: 12, flexShrink: 0,
                     background: `${f.cor}18`, color: f.cor,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 16,
+                    fontFamily: 'var(--font-mono)', fontWeight: 700,
+                    fontSize: f.icone ? 22 : 16,
                   }}>
-                    {f.letra}
+                    {f.icone || f.letra}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{f.nome}</div>
@@ -205,6 +219,25 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
       {/* Ficha modal */}
       {modalOpen && (
         <Modal onClose={() => setModalOpen(false)} title={editFicha ? 'Editar ficha' : 'Nova ficha'}>
+          {/* Preview */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 20 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 13, flexShrink: 0,
+              background: `${fichaCor}18`, color: fichaCor,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-mono)', fontWeight: 700,
+              fontSize: fichaIcone ? 24 : 18,
+            }}>
+              {fichaIcone || fichaLetra || '?'}
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fichaNome || 'Nome da ficha'}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', letterSpacing: '0.06em', marginTop: 2 }}>
+                FICHA {fichaLetra} · {fichaDuracao}MIN
+              </div>
+            </div>
+          </div>
+
           <Field label="Nome">
             <input
               autoFocus type="text" value={fichaNome}
@@ -214,43 +247,72 @@ export default function AlunoDetail({ aluno, fichas: initialFichas, treinosTotal
               style={inputStyle}
             />
           </Field>
-          <Field label="Letra">
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {LETRAS.slice(0, 10).split('').map(l => (
-                <button key={l} onClick={() => setFichaLetra(l)} style={{
-                  width: 38, height: 38, borderRadius: 10, cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13,
-                  background: fichaLetra === l ? `${fichaCor}25` : 'var(--surface-2)',
-                  border: `1px solid ${fichaLetra === l ? fichaCor : 'var(--border)'}`,
-                  color: fichaLetra === l ? fichaCor : 'var(--muted)',
-                }}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          </Field>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 0 }}>
+            <Field label="Letra">
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {LETRAS.split('').map(l => (
+                  <button key={l} onClick={() => setFichaLetra(l)} style={{
+                    width: 34, height: 34, borderRadius: 8, cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 12,
+                    background: fichaLetra === l ? `${fichaCor}25` : 'var(--surface-2)',
+                    border: `1px solid ${fichaLetra === l ? fichaCor : 'var(--border)'}`,
+                    color: fichaLetra === l ? fichaCor : 'var(--muted)',
+                  }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Duração (min)">
+              <input
+                type="number" min={1} max={300} value={fichaDuracao}
+                onChange={e => setFichaDuracao(Number(e.target.value))}
+                style={{ ...inputStyle, width: '100%' }}
+              />
+            </Field>
+          </div>
+
           <Field label="Cor">
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {COR_PRESETS.map(cor => (
                 <button key={cor} onClick={() => setFichaCor(cor)} style={{
-                  width: 32, height: 32, borderRadius: '50%', background: cor, border: 0, cursor: 'pointer',
+                  width: 30, height: 30, borderRadius: '50%', background: cor, border: 0, cursor: 'pointer',
                   outline: fichaCor === cor ? `3px solid ${cor}` : 'none', outlineOffset: 2,
-                  opacity: fichaCor === cor ? 1 : 0.4,
+                  opacity: fichaCor === cor ? 1 : 0.45,
+                  transition: 'opacity 100ms',
                 }} />
               ))}
             </div>
           </Field>
-          <Field label="Duração estimada (min)">
-            <input
-              type="number" min={1} max={300} value={fichaDuracao}
-              onChange={e => setFichaDuracao(Number(e.target.value))}
-              style={{ ...inputStyle, width: 100 }}
-            />
+
+          <Field label={`Ícone${fichaIcone ? ` · ${fichaIcone}` : ' · opcional'}`}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: fichaIcone ? 8 : 0 }}>
+              {ICONES.map(ic => (
+                <button key={ic} onClick={() => setFichaIcone(fichaIcone === ic ? '' : ic)} style={{
+                  width: 36, height: 36, borderRadius: 9, cursor: 'pointer', fontSize: 18,
+                  background: fichaIcone === ic ? `${fichaCor}20` : 'var(--surface-2)',
+                  border: `1px solid ${fichaIcone === ic ? fichaCor : 'var(--border)'}`,
+                  transition: 'all 100ms',
+                }}>
+                  {ic}
+                </button>
+              ))}
+            </div>
+            {fichaIcone && (
+              <button onClick={() => setFichaIcone('')} style={{
+                marginTop: 6, fontSize: 11, color: 'var(--muted-2)', background: 'none', border: 0,
+                cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+              }}>
+                × REMOVER ÍCONE
+              </button>
+            )}
           </Field>
+
           <button onClick={saveFicha} disabled={saving || !fichaNome.trim()} style={{
             width: '100%', height: 46, borderRadius: 12, fontWeight: 700, fontSize: 14,
             background: 'var(--accent)', color: 'var(--accent-ink)', border: 0, cursor: 'pointer',
-            opacity: (saving || !fichaNome.trim()) ? 0.5 : 1, marginTop: 8,
+            opacity: (saving || !fichaNome.trim()) ? 0.5 : 1, marginTop: 4,
           }}>
             {saving ? 'Salvando…' : editFicha ? 'Salvar alterações' : 'Criar ficha'}
           </button>
