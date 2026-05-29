@@ -39,10 +39,11 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
 
   // Add professional modal
   const [addModal, setAddModal] = useState<AddModalState>(null)
-  const [addEmail, setAddEmail] = useState('')
-  const [addSearchResult, setAddSearchResult] = useState<{ id: string; nome: string } | null>(null)
-  const [addSearched, setAddSearched] = useState(false)
+  const [addSearch, setAddSearch] = useState('')
+  const [addList, setAddList] = useState<{ id: string; nome: string; email: string; objetivo: string | null }[]>([])
+  const [addSelected, setAddSelected] = useState<{ id: string; nome: string } | null>(null)
   const [addLoading, setAddLoading] = useState(false)
+  const [addSaving, setAddSaving] = useState(false)
   const [addError, setAddError] = useState('')
 
   // Edit professional modal
@@ -90,41 +91,35 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
     router.refresh()
   }
 
-  // ── Add professional by email ─────────────────────────────────────────────────
-  function openAdd(type: 'trainer' | 'nutritionist') {
+  // ── Add professional — searchable list ───────────────────────────────────────
+  async function openAdd(type: 'trainer' | 'nutritionist') {
     setAddModal({ type })
-    setAddEmail('')
-    setAddSearchResult(null)
-    setAddSearched(false)
+    setAddSearch('')
+    setAddSelected(null)
     setAddError('')
+    setAddLoading(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any).rpc('get_available_students', { search_text: '' })
+    setAddList((data ?? []) as { id: string; nome: string; email: string; objetivo: string | null }[])
+    setAddLoading(false)
   }
 
-  async function searchUser() {
-    if (!addEmail.trim()) return
+  async function searchProfUsers(q: string) {
+    setAddSearch(q)
     setAddLoading(true)
-    setAddError('')
-    setAddSearchResult(null)
-    setAddSearched(false)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any).rpc('get_profile_by_email', { email_input: addEmail.trim() })
-    const found = Array.isArray(data) ? data[0] : data
-    setAddSearched(true)
-    if (!found) { setAddError('Nenhum usuário encontrado com esse e-mail.'); setAddLoading(false); return }
-    if (['trainer', 'nutritionist', 'admin'].includes(found.role)) {
-      setAddError(`${found.nome} já é ${ROLE_LABEL[found.role] ?? found.role}.`)
-      setAddLoading(false); return
-    }
-    setAddSearchResult({ id: found.id, nome: found.nome })
+    const { data } = await (supabase as any).rpc('get_available_students', { search_text: q })
+    setAddList((data ?? []) as { id: string; nome: string; email: string; objetivo: string | null }[])
     setAddLoading(false)
   }
 
   async function confirmAdd() {
-    if (!addSearchResult || !addModal) return
-    setAddLoading(true)
+    if (!addSelected || !addModal) return
+    setAddSaving(true)
     const newRole = addModal.type === 'trainer' ? 'trainer' : 'nutritionist'
-    await supabase.from('profiles').update({ role: newRole }).eq('id', addSearchResult.id)
+    await supabase.from('profiles').update({ role: newRole }).eq('id', addSelected.id)
     setAddModal(null)
-    setAddLoading(false)
+    setAddSaving(false)
     router.refresh()
   }
 
@@ -435,55 +430,70 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
       {/* ── Add professional modal ─────────────────────────────────────────────── */}
       {addModal && (
         <Modal title={`Adicionar ${addModal.type === 'trainer' ? 'Personal Trainer' : 'Nutricionista'}`} onClose={() => setAddModal(null)}>
-          <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 18 }}>
-            Digite o e-mail do usuário que já tem conta no MeuTreino e deseja se tornar {addModal.type === 'trainer' ? 'personal trainer' : 'nutricionista'}.
-          </p>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-            <input
-              type="email" placeholder="E-mail do usuário" value={addEmail}
-              onChange={e => { setAddEmail(e.target.value); setAddSearched(false); setAddSearchResult(null); setAddError('') }}
-              onKeyDown={e => e.key === 'Enter' && searchUser()}
-              style={{
-                flex: 1, height: 42, borderRadius: 10, padding: '0 12px',
-                background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-                color: 'var(--text)', fontSize: 14, outline: 'none',
-              }}
-            />
-            <button onClick={searchUser} disabled={addLoading || !addEmail.trim()} style={{
-              height: 42, padding: '0 16px', borderRadius: 10,
-              background: 'var(--surface-3)', border: '1px solid var(--border-strong)',
-              color: 'var(--text)', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              opacity: addLoading ? 0.5 : 1,
-            }}>
-              {addLoading ? '…' : 'Buscar'}
-            </button>
+          <input
+            autoFocus
+            type="text"
+            placeholder="Buscar por nome ou e-mail…"
+            value={addSearch}
+            onChange={e => searchProfUsers(e.target.value)}
+            style={{
+              width: '100%', height: 42, borderRadius: 10, padding: '0 12px',
+              background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+              color: 'var(--text)', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+              marginBottom: 10,
+            }}
+          />
+
+          <div style={{
+            borderRadius: 12, border: '1px solid var(--border)',
+            overflow: 'hidden', maxHeight: 280, overflowY: 'auto',
+            marginBottom: 14,
+          }}>
+            {addLoading ? (
+              <div style={{ padding: '18px 16px', color: 'var(--muted-2)', fontSize: 13, textAlign: 'center' }}>Carregando…</div>
+            ) : addList.length === 0 ? (
+              <div style={{ padding: '18px 16px', color: 'var(--muted-2)', fontSize: 13 }}>
+                {addSearch ? 'Nenhum usuário encontrado.' : 'Nenhum usuário disponível.'}
+              </div>
+            ) : addList.map(u => {
+              const isSelected = addSelected?.id === u.id
+              const color = addModal.type === 'trainer' ? '#00E5FF' : '#A78BFA'
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => setAddSelected(isSelected ? null : { id: u.id, nome: u.nome })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '11px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border)',
+                    background: isSelected ? `${color}12` : 'transparent',
+                    transition: 'background 100ms',
+                  }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)' }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <Avatar name={u.nome} color={isSelected ? color : undefined} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: isSelected ? color : 'var(--text)' }}>{u.nome}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                  </div>
+                  {isSelected && <span style={{ color, fontSize: 16 }}>✓</span>}
+                </div>
+              )
+            })}
           </div>
 
           {addError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '0 0 12px' }}>{addError}</p>}
 
-          {addSearchResult && (
-            <div style={{
-              padding: '14px 16px', borderRadius: 12, marginBottom: 16,
-              background: 'rgba(109,255,176,0.06)', border: '1px solid rgba(109,255,176,0.25)',
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
-              <Avatar name={addSearchResult.nome} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{addSearchResult.nome}</div>
-                <div style={{ fontSize: 12, color: 'var(--ok)' }}>Usuário encontrado</div>
-              </div>
-            </div>
-          )}
-
-          {addSearchResult && (
-            <button onClick={confirmAdd} disabled={addLoading} style={{
-              width: '100%', height: 46, borderRadius: 12, fontWeight: 700, fontSize: 14,
-              background: 'var(--accent)', color: 'var(--accent-ink)', border: 0, cursor: 'pointer',
-              opacity: addLoading ? 0.5 : 1,
-            }}>
-              {addLoading ? 'Salvando…' : `Tornar ${addModal.type === 'trainer' ? 'Personal Trainer' : 'Nutricionista'}`}
-            </button>
-          )}
+          <button onClick={confirmAdd} disabled={!addSelected || addSaving} style={{
+            width: '100%', height: 46, borderRadius: 12, fontWeight: 700, fontSize: 14,
+            background: 'var(--accent)', color: 'var(--accent-ink)', border: 0, cursor: 'pointer',
+            opacity: (!addSelected || addSaving) ? 0.4 : 1, transition: 'opacity 120ms',
+          }}>
+            {addSaving ? 'Salvando…' : addSelected
+              ? `Tornar ${addModal.type === 'trainer' ? 'Personal Trainer' : 'Nutricionista'}`
+              : 'Selecione um usuário'}
+          </button>
         </Modal>
       )}
 
