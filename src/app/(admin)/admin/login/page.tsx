@@ -1,11 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function AdminLoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
   const supabase = createClient()
@@ -14,9 +22,10 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const statusMsg = params.get('status') === 'pending'
-    ? 'Conta criada! Aguardando aprovação do administrador.'
-    : params.get('status') === 'unauthorized'
+  const status = params.get('status')
+  const statusMsg = status === 'pending'
+    ? 'Cadastro recebido! Aguardando aprovação do administrador.'
+    : status === 'unauthorized'
     ? 'Acesso não autorizado. Entre em contato com o administrador.'
     : ''
 
@@ -57,9 +66,9 @@ export default function AdminLoginPage() {
         {statusMsg && (
           <div style={{
             padding: '12px 16px', borderRadius: 12, marginBottom: 20,
-            background: params.get('status') === 'pending' ? 'rgba(109,255,176,0.08)' : 'rgba(255,79,94,0.08)',
-            border: `1px solid ${params.get('status') === 'pending' ? 'rgba(109,255,176,0.3)' : 'rgba(255,79,94,0.3)'}`,
-            color: params.get('status') === 'pending' ? 'var(--ok)' : 'var(--danger)',
+            background: status === 'pending' ? 'rgba(109,255,176,0.08)' : 'rgba(255,79,94,0.08)',
+            border: `1px solid ${status === 'pending' ? 'rgba(109,255,176,0.3)' : 'rgba(255,79,94,0.3)'}`,
+            color: status === 'pending' ? 'var(--ok)' : 'var(--danger)',
             fontSize: 13, fontWeight: 500, textAlign: 'center',
           }}>
             {statusMsg}
@@ -93,15 +102,11 @@ export default function AdminLoginPage() {
             <p style={{ color: 'var(--danger)', fontSize: 13, textAlign: 'center', margin: 0 }}>{error}</p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              height: 48, borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              background: 'var(--accent)', color: 'var(--accent-ink)', border: 0,
-              opacity: loading ? 0.5 : 1, marginTop: 4,
-            }}
-          >
+          <button type="submit" disabled={loading} style={{
+            height: 48, borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            background: 'var(--accent)', color: 'var(--accent-ink)', border: 0,
+            opacity: loading ? 0.5 : 1, marginTop: 4,
+          }}>
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
