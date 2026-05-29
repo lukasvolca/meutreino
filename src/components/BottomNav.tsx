@@ -25,7 +25,10 @@ export default function BottomNav() {
       right: 0,
       height: NAV_H,
       zIndex: 50,
-      background: 'linear-gradient(to top, rgba(10,11,13,0.98) 60%, rgba(10,11,13,0))',
+      background: 'rgba(10,11,13,0.72)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      borderTop: '1px solid rgba(255,255,255,0.06)',
       paddingTop: 12,
       pointerEvents: 'none',
     }}>
