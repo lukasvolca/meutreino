@@ -141,11 +141,18 @@ function SetRow({ idx, set, tipo, accent, onToggle, onUpdate }: {
   )
 }
 
+const cardActionBtn: React.CSSProperties = {
+  width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border)',
+  background: 'rgba(255,255,255,0.04)', cursor: 'pointer', flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: 'var(--muted-2)',
+}
+
 // ── ExerciseCard ───────────────────────────────────────────────────────────────
 function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   isDragging, translateY, shiftY,
   onDragHandleDown, cardRef,
-  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onStartRest,
+  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onStartRest,
 }: {
   ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
   historico: number[],
@@ -156,6 +163,7 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   onUpdateSet: (i: number, patch: Partial<SetState>) => void,
   onAddSet: () => void, onRemoveSet: () => void,
   onPlayVideo: () => void, onEdit: () => void,
+  onDuplicate: () => void, onDelete: () => void, isDuplicating: boolean,
   onStartRest: (sec: number) => void,
 }) {
   const completedSets = sets.filter(s => s.done).length
@@ -246,9 +254,37 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
             {metaSummary}
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
           <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {/* Duplicate */}
+            <button
+              onClick={e => { e.stopPropagation(); onDuplicate() }}
+              disabled={isDuplicating}
+              title="Duplicar"
+              style={{ ...cardActionBtn, opacity: isDuplicating ? 0.4 : 1 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            {/* Edit */}
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              title="Editar"
+              style={cardActionBtn}
+            >
+              <Icon name="edit" size={12} color="currentColor"/>
+            </button>
+            {/* Delete */}
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              title="Excluir"
+              style={{ ...cardActionBtn, color: 'var(--danger)' }}
+            >
+              <Icon name="trash" size={12} color="currentColor"/>
+            </button>
             {completedSets > 0 && (
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: allDone ? `${accent}24` : 'rgba(109,255,176,0.14)', color: allDone ? accent : '#6dffb0', letterSpacing: '0.04em' }}>
                 {completedSets}/{sets.length}
@@ -578,6 +614,9 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [showNewEx, setShowNewEx] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
+  const [confirmDeleteEx, setConfirmDeleteEx] = useState<Exercicio | null>(null)
+  const [deletingExId, setDeletingExId] = useState<string | null>(null)
+  const [duplicatingExId, setDuplicatingExId] = useState<string | null>(null)
 
   const startTimeRef = useRef(Date.now())
   const [elapsedSec, setElapsedSec] = useState(0)
@@ -723,6 +762,38 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         supabase.from('exercicios').update({ ordem: i }).eq('id', ex.id)
       ))
     }
+  }
+
+  // ── Duplicate / Delete exercise ──────────────────────────────────────────────
+  async function duplicateEx(ex: Exercicio) {
+    setDuplicatingExId(ex.id)
+    const idx = exList.findIndex(e => e.id === ex.id)
+    const insertOrdem = idx + 1
+    const after = exList.slice(insertOrdem)
+    await Promise.all(after.map((e, i) =>
+      supabase.from('exercicios').update({ ordem: insertOrdem + 1 + i }).eq('id', e.id)
+    ))
+    const { data } = await supabase.from('exercicios').insert({
+      ficha_id: ex.ficha_id, nome: ex.nome + ' (cópia)',
+      grupo: ex.grupo, tipo: ex.tipo,
+      series: ex.series, reps: ex.reps, carga: ex.carga,
+      descanso: ex.descanso, duracao_seg: ex.duracao_seg,
+      yt_id: ex.yt_id, ordem: insertOrdem,
+    }).select('*').single()
+    if (data) {
+      setExList(prev => { const n = [...prev]; n.splice(insertOrdem, 0, data); return n })
+      setSetsByEx(prev => ({ ...prev, [data.id]: buildInitialSets(data) }))
+    }
+    setDuplicatingExId(null)
+  }
+
+  async function deleteEx(ex: Exercicio) {
+    setDeletingExId(ex.id)
+    await supabase.from('exercicios').delete().eq('id', ex.id)
+    setExList(prev => prev.filter(e => e.id !== ex.id))
+    setSetsByEx(prev => { const n = { ...prev }; delete n[ex.id]; return n })
+    setConfirmDeleteEx(null)
+    setDeletingExId(null)
   }
 
   // ── Pause / Resume ────────────────────────────────────────────────────────────
@@ -908,6 +979,9 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
                 onRemoveSet={() => setSetsByEx(prev => { const cur = prev[ex.id] ?? []; if (cur.length <= 1) return prev; return { ...prev, [ex.id]: cur.slice(0, -1) } })}
                 onPlayVideo={() => setVideoEx(ex)}
                 onEdit={() => setEditorEx(ex)}
+                onDuplicate={() => duplicateEx(ex)}
+                onDelete={() => setConfirmDeleteEx(ex)}
+                isDuplicating={duplicatingExId === ex.id}
                 onStartRest={startRest}
               />
             )
@@ -969,6 +1043,38 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         />
       )}
       {toast && <Toast message={toast}/>}
+
+      {/* ── Delete exercise confirm ── */}
+      {confirmDeleteEx && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end', padding: '0 0 32px' }}>
+          <div onClick={() => setConfirmDeleteEx(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', animation: 'fade-in 180ms ease' }}/>
+          <div style={{
+            position: 'relative', width: '100%', background: 'var(--surface-1)',
+            borderRadius: '20px 20px 0 0', border: '1px solid var(--border-strong)',
+            padding: '20px 20px 8px', animation: 'slide-up 220ms cubic-bezier(.2,.7,.3,1)',
+          }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 16px' }}/>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Excluir exercício?</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 20 }}>
+              <strong style={{ color: 'var(--text)' }}>{confirmDeleteEx.nome}</strong> será removido permanentemente desta ficha.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDeleteEx(null)} style={{
+                flex: 1, height: 48, borderRadius: 14, background: 'var(--surface-3)',
+                border: 'none', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+              }}>Cancelar</button>
+              <button onClick={() => deleteEx(confirmDeleteEx)} disabled={!!deletingExId} style={{
+                flex: 1, height: 48, borderRadius: 14,
+                background: 'rgba(255,79,94,0.12)', border: '1px solid rgba(255,79,94,0.4)',
+                color: 'var(--danger)', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                opacity: deletingExId ? 0.5 : 1,
+              }}>
+                {deletingExId ? 'Excluindo…' : 'Sim, excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
