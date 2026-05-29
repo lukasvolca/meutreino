@@ -39,6 +39,7 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Exercicio | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
   function openNew() {
     setEditEx(null)
@@ -105,6 +106,37 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
     setExercicios(prev => prev.filter(e => e.id !== ex.id))
     setDeletingId(null)
     setConfirmDelete(null)
+  }
+
+  async function duplicateExercicio(ex: Exercicio, idx: number) {
+    setDuplicatingId(ex.id)
+    const insertOrdem = idx + 1
+    // Shift ordem of all exercises after insertion point
+    const after = exercicios.slice(insertOrdem)
+    await Promise.all(after.map((e, i) =>
+      supabase.from('exercicios').update({ ordem: insertOrdem + 1 + i }).eq('id', e.id)
+    ))
+    const { data } = await supabase.from('exercicios').insert({
+      ficha_id: ficha.id,
+      nome: ex.nome + ' (cópia)',
+      grupo: ex.grupo,
+      tipo: ex.tipo,
+      series: ex.series,
+      reps: ex.reps,
+      carga: ex.carga,
+      descanso: ex.descanso,
+      duracao_seg: ex.duracao_seg,
+      yt_id: ex.yt_id,
+      ordem: insertOrdem,
+    }).select('*').single()
+    if (data) {
+      setExercicios(prev => {
+        const next = [...prev]
+        next.splice(insertOrdem, 0, data)
+        return next
+      })
+    }
+    setDuplicatingId(null)
   }
 
   async function moveExercicio(idx: number, dir: -1 | 1) {
@@ -191,9 +223,11 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
                 idx={idx}
                 total={exercicios.length}
                 moving={!!moving}
+                duplicating={duplicatingId === ex.id}
                 onEdit={() => openEdit(ex)}
                 onDelete={() => setConfirmDelete(ex)}
                 onMove={dir => moveExercicio(idx, dir)}
+                onDuplicate={() => duplicateExercicio(ex, idx)}
               />
             ))}
           </div>
@@ -351,10 +385,10 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
 // ── ExercicioRow ─────────────────────────────────────────────────────────────
 
 function ExercicioRow({
-  ex, idx, total, moving, onEdit, onDelete, onMove,
+  ex, idx, total, moving, duplicating, onEdit, onDelete, onMove, onDuplicate,
 }: {
-  ex: Exercicio; idx: number; total: number; moving: boolean
-  onEdit: () => void; onDelete: () => void; onMove: (dir: -1 | 1) => void
+  ex: Exercicio; idx: number; total: number; moving: boolean; duplicating: boolean
+  onEdit: () => void; onDelete: () => void; onMove: (dir: -1 | 1) => void; onDuplicate: () => void
 }) {
   const isForca = ex.tipo === 'forca'
   const isIso = ex.tipo === 'iso'
@@ -409,6 +443,12 @@ function ExercicioRow({
       <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
         <button onClick={() => onMove(-1)} disabled={idx === 0 || moving} style={{ ...smallBtn, opacity: idx === 0 ? 0.25 : 1 }} title="Mover para cima">↑</button>
         <button onClick={() => onMove(1)} disabled={idx === total - 1 || moving} style={{ ...smallBtn, opacity: idx === total - 1 ? 0.25 : 1 }} title="Mover para baixo">↓</button>
+        <button onClick={onDuplicate} disabled={duplicating} style={{ ...smallBtn, opacity: duplicating ? 0.4 : 1 }} title="Duplicar exercício">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
         <button onClick={onEdit} style={smallBtn} title="Editar">✏️</button>
         <button onClick={onDelete} style={smallBtn} title="Excluir">🗑️</button>
       </div>
