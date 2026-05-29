@@ -1033,6 +1033,23 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
           onSaved={saved => {
             if (editorEx?.id) {
               setExList(prev => prev.map(e => e.id === saved.id ? saved : e))
+              // Rebuild sets: keep done sets as-is, update undone sets with new values
+              setSetsByEx(prev => {
+                const existing = prev[saved.id] ?? []
+                const baseReps = parseInt(String(saved.reps ?? '10').split('-')[0]) || 10
+                const newSets: SetState[] = Array.from({ length: saved.series }, (_, i) => {
+                  const cur = existing[i]
+                  if (cur?.done) return cur
+                  return {
+                    done: false,
+                    carga: saved.carga,
+                    reps: baseReps,
+                    duracaoSeg: saved.duracao_seg ?? 30,
+                    duracaoMin: saved.duracao_min ?? 10,
+                  }
+                })
+                return { ...prev, [saved.id]: newSets }
+              })
             } else {
               setExList(prev => [...prev, saved])
               setSetsByEx(prev => ({ ...prev, [saved.id]: buildInitialSets(saved) }))
