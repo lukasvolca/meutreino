@@ -61,10 +61,11 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
 
   // Add student modal
   const [addStudentModal, setAddStudentModal] = useState<AddStudentModalState>(null)
-  const [addStudentEmail, setAddStudentEmail] = useState('')
-  const [addStudentResult, setAddStudentResult] = useState<{ id: string; nome: string } | null>(null)
-  const [addStudentSearched, setAddStudentSearched] = useState(false)
+  const [addStudentSearch, setAddStudentSearch] = useState('')
+  const [addStudentList, setAddStudentList] = useState<{ id: string; nome: string; email: string; objetivo: string | null }[]>([])
+  const [addStudentSelected, setAddStudentSelected] = useState<{ id: string; nome: string } | null>(null)
   const [addStudentLoading, setAddStudentLoading] = useState(false)
+  const [addStudentSaving, setAddStudentSaving] = useState(false)
   const [addStudentError, setAddStudentError] = useState('')
   const [addStudentTrainerId, setAddStudentTrainerId] = useState('')
 
@@ -190,54 +191,51 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
   }
 
   // ── Add student modal ─────────────────────────────────────────────────────────
-  function openAddStudent(trainerId?: string) {
-    setAddStudentModal({ trainerId: trainerId ?? myProfile.id })
-    setAddStudentEmail('')
-    setAddStudentResult(null)
-    setAddStudentSearched(false)
+  async function openAddStudent(trainerId?: string) {
+    const tid = trainerId ?? myProfile.id
+    setAddStudentModal({ trainerId: tid })
+    setAddStudentSearch('')
+    setAddStudentSelected(null)
     setAddStudentError('')
-    setAddStudentTrainerId(trainerId ?? myProfile.id)
+    setAddStudentTrainerId(tid)
+    setAddStudentLoading(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any).rpc('get_available_students', { search_text: '' })
+    const linkedIds = new Set(students.filter(s => s.status === 'approved' || s.status === 'pending_link').map(s => s.id))
+    setAddStudentList(((data ?? []) as { id: string; nome: string; email: string; objetivo: string | null }[]).filter(u => !linkedIds.has(u.id)))
+    setAddStudentLoading(false)
   }
 
-  async function searchStudentUser() {
-    if (!addStudentEmail.trim()) return
+  async function searchStudents(q: string) {
+    setAddStudentSearch(q)
     setAddStudentLoading(true)
-    setAddStudentError('')
-    setAddStudentResult(null)
-    setAddStudentSearched(false)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any).rpc('get_profile_by_email', { email_input: addStudentEmail.trim() })
-    const found = Array.isArray(data) ? data[0] : data
-    setAddStudentSearched(true)
-    if (!found) { setAddStudentError('Nenhum usuário encontrado com esse e-mail.'); setAddStudentLoading(false); return }
-    if (['trainer', 'nutritionist', 'admin', 'trainer_pending', 'nutritionist_pending'].includes(found.role)) {
-      setAddStudentError(`${found.nome} é um profissional e não pode ser adicionado como aluno.`)
-      setAddStudentLoading(false); return
-    }
-    const alreadyLinked = students.some(s => s.id === found.id && (s.status === 'approved' || s.status === 'pending_link'))
-    if (alreadyLinked) { setAddStudentError(`${found.nome} já está vinculado ou tem solicitação pendente.`); setAddStudentLoading(false); return }
-    setAddStudentResult({ id: found.id, nome: found.nome })
+    const { data } = await (supabase as any).rpc('get_available_students', { search_text: q })
+    const linkedIds = new Set(students.filter(s => s.status === 'approved' || s.status === 'pending_link').map(s => s.id))
+    setAddStudentList(((data ?? []) as { id: string; nome: string; email: string; objetivo: string | null }[]).filter(u => !linkedIds.has(u.id)))
     setAddStudentLoading(false)
   }
 
   async function confirmAddStudent() {
-    if (!addStudentResult) return
-    setAddStudentLoading(true)
+    if (!addStudentSelected) return
+    setAddStudentSaving(true)
+    setAddStudentError('')
     const tid = isAdmin ? addStudentTrainerId : myProfile.id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any).from('trainer_student_links').insert({
       trainer_id: tid,
-      student_id: addStudentResult.id,
+      student_id: addStudentSelected.id,
       status: 'approved',
       approved_at: new Date().toISOString(),
     })
     if (error) {
       setAddStudentError(error.code === '23505' ? 'Esse aluno já está vinculado.' : error.message)
+      setAddStudentSaving(false)
     } else {
       setAddStudentModal(null)
+      setAddStudentSaving(false)
+      router.refresh()
     }
-    setAddStudentLoading(false)
-    router.refresh()
   }
 
   const approvedStudents = students.filter(s => s.status === 'approved')
@@ -525,12 +523,8 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
       {/* ── Add student modal ────────────────────────────────────────────────── */}
       {addStudentModal && (
         <Modal title="Adicionar aluno" onClose={() => setAddStudentModal(null)}>
-          <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 18 }}>
-            Digite o e-mail do usuário cadastrado no MeuTreino para adicioná-lo como aluno.
-          </p>
-
           {isAdmin && trainers.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 14 }}>
               <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>
                 Personal trainer
               </label>
@@ -538,7 +532,7 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
                 value={addStudentTrainerId}
                 onChange={e => setAddStudentTrainerId(e.target.value)}
                 style={{
-                  width: '100%', height: 42, borderRadius: 10, padding: '0 12px',
+                  width: '100%', height: 40, borderRadius: 10, padding: '0 12px',
                   background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
                   color: 'var(--text)', fontSize: 14, outline: 'none', cursor: 'pointer',
                 }}
@@ -550,52 +544,72 @@ export default function AdminDashboard({ myProfile, pendingProfessionals, traine
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-            <input
-              type="email" placeholder="E-mail do aluno" value={addStudentEmail}
-              onChange={e => { setAddStudentEmail(e.target.value); setAddStudentSearched(false); setAddStudentResult(null); setAddStudentError('') }}
-              onKeyDown={e => e.key === 'Enter' && searchStudentUser()}
-              style={{
-                flex: 1, height: 42, borderRadius: 10, padding: '0 12px',
-                background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-                color: 'var(--text)', fontSize: 14, outline: 'none',
-              }}
-            />
-            <button onClick={searchStudentUser} disabled={addStudentLoading || !addStudentEmail.trim()} style={{
-              height: 42, padding: '0 16px', borderRadius: 10,
-              background: 'var(--surface-3)', border: '1px solid var(--border-strong)',
-              color: 'var(--text)', fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              opacity: addStudentLoading ? 0.5 : 1,
-            }}>
-              {addStudentLoading ? '…' : 'Buscar'}
-            </button>
+          <input
+            autoFocus
+            type="text"
+            placeholder="Buscar por nome ou e-mail…"
+            value={addStudentSearch}
+            onChange={e => searchStudents(e.target.value)}
+            style={{
+              width: '100%', height: 42, borderRadius: 10, padding: '0 12px',
+              background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+              color: 'var(--text)', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+              marginBottom: 10,
+            }}
+          />
+
+          <div style={{
+            borderRadius: 12, border: '1px solid var(--border)',
+            overflow: 'hidden', maxHeight: 280, overflowY: 'auto',
+            marginBottom: 14,
+          }}>
+            {addStudentLoading ? (
+              <div style={{ padding: '18px 16px', color: 'var(--muted-2)', fontSize: 13, textAlign: 'center' }}>Carregando…</div>
+            ) : addStudentList.length === 0 ? (
+              <div style={{ padding: '18px 16px', color: 'var(--muted-2)', fontSize: 13 }}>
+                {addStudentSearch ? 'Nenhum usuário encontrado.' : 'Nenhum aluno disponível para vincular.'}
+              </div>
+            ) : addStudentList.map(u => {
+              const isSelected = addStudentSelected?.id === u.id
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => setAddStudentSelected(isSelected ? null : { id: u.id, nome: u.nome })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '11px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border)',
+                    background: isSelected ? 'rgba(204,255,0,0.07)' : 'transparent',
+                    transition: 'background 100ms',
+                  }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)' }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <Avatar name={u.nome} color={isSelected ? 'var(--accent)' : undefined} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: isSelected ? 'var(--accent)' : 'var(--text)' }}>{u.nome}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                  </div>
+                  {isSelected && <span style={{ color: 'var(--accent)', fontSize: 16 }}>✓</span>}
+                </div>
+              )
+            })}
           </div>
 
           {addStudentError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '0 0 12px' }}>{addStudentError}</p>}
 
-          {addStudentResult && (
-            <div style={{
-              padding: '14px 16px', borderRadius: 12, marginBottom: 16,
-              background: 'rgba(109,255,176,0.06)', border: '1px solid rgba(109,255,176,0.25)',
-              display: 'flex', alignItems: 'center', gap: 12,
-            }}>
-              <Avatar name={addStudentResult.nome} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{addStudentResult.nome}</div>
-                <div style={{ fontSize: 12, color: 'var(--ok)' }}>Usuário encontrado</div>
-              </div>
-            </div>
-          )}
-
-          {addStudentResult && (
-            <button onClick={confirmAddStudent} disabled={addStudentLoading} style={{
+          <button
+            onClick={confirmAddStudent}
+            disabled={!addStudentSelected || addStudentSaving}
+            style={{
               width: '100%', height: 46, borderRadius: 12, fontWeight: 700, fontSize: 14,
               background: 'var(--accent)', color: 'var(--accent-ink)', border: 0, cursor: 'pointer',
-              opacity: addStudentLoading ? 0.5 : 1,
-            }}>
-              {addStudentLoading ? 'Adicionando…' : 'Adicionar aluno'}
-            </button>
-          )}
+              opacity: (!addStudentSelected || addStudentSaving) ? 0.4 : 1,
+              transition: 'opacity 120ms',
+            }}
+          >
+            {addStudentSaving ? 'Adicionando…' : addStudentSelected ? `Adicionar ${addStudentSelected.nome}` : 'Selecione um aluno'}
+          </button>
         </Modal>
       )}
 
