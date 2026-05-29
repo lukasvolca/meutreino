@@ -19,6 +19,7 @@ const TIPOS = [
 const EMPTY_FORM = (): Partial<Exercicio> => ({
   nome: '', grupo: null, tipo: 'forca',
   series: 3, reps: '10-12', carga: 0,
+  is_biset: false, carga_b: 0,
   descanso: 60, duracao_seg: null, yt_id: null,
 })
 
@@ -69,6 +70,8 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
           series: form.series ?? 3,
           reps: form.reps ?? '10-12',
           carga: form.carga ?? 0,
+          is_biset: form.is_biset ?? false,
+          carga_b: form.is_biset ? (form.carga_b ?? 0) : 0,
           descanso: form.descanso ?? 60,
           duracao_seg: form.duracao_seg ?? null,
           yt_id: form.yt_id?.trim() || null,
@@ -87,6 +90,8 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
           series: form.series ?? 3,
           reps: form.reps ?? '10-12',
           carga: form.carga ?? 0,
+          is_biset: form.is_biset ?? false,
+          carga_b: form.is_biset ? (form.carga_b ?? 0) : 0,
           descanso: form.descanso ?? 60,
           duracao_seg: form.duracao_seg ?? null,
           yt_id: form.yt_id?.trim() || null,
@@ -311,18 +316,44 @@ export default function FichaAdmin({ ficha, aluno, exercicios: initialExercicios
             )}
 
             {isForca && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                <Field label="Carga inicial (kg)">
-                  <input type="number" min={0} step={0.5} value={form.carga ?? 0}
-                    onChange={e => setField('carga', Number(e.target.value))}
-                    style={inputStyle} />
-                </Field>
-                <Field label="Descanso (seg)">
-                  <input type="number" min={0} max={600} value={form.descanso ?? 60}
-                    onChange={e => setField('descanso', Number(e.target.value))}
-                    style={inputStyle} />
-                </Field>
-              </div>
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <Field label={form.is_biset ? 'Carga A (kg)' : 'Carga inicial (kg)'}>
+                    <input type="number" min={0} step={0.5} value={form.carga ?? 0}
+                      onChange={e => setField('carga', Number(e.target.value))}
+                      style={inputStyle} />
+                  </Field>
+                  <Field label="Descanso (seg)">
+                    <input type="number" min={0} max={600} value={form.descanso ?? 60}
+                      onChange={e => setField('descanso', Number(e.target.value))}
+                      style={inputStyle} />
+                  </Field>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    onClick={() => setField('is_biset', !form.is_biset)}
+                    style={{
+                      height: 34, padding: '0 14px', borderRadius: 9, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                      background: form.is_biset ? 'rgba(167,139,250,0.15)' : 'var(--surface-2)',
+                      border: `1px solid ${form.is_biset ? '#A78BFA' : 'var(--border)'}`,
+                      color: form.is_biset ? '#A78BFA' : 'var(--muted)',
+                      fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+                      transition: 'all 150ms', flexShrink: 0,
+                    }}
+                  >
+                    {form.is_biset ? '✓ BISET' : '+ BISET'}
+                  </button>
+                  {form.is_biset && (
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A78BFA', marginBottom: 4 }}>Carga B (kg)</div>
+                      <input type="number" min={0} step={0.5} value={form.carga_b ?? 0}
+                        onChange={e => setField('carga_b', Number(e.target.value))}
+                        style={{ ...inputStyle, border: '1px solid #A78BFA60', background: 'rgba(167,139,250,0.08)' }} />
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             {/* YouTube */}
@@ -394,7 +425,9 @@ function ExercicioRow({
   const isIso = ex.tipo === 'iso'
 
   let meta = ''
-  if (isForca) meta = `${ex.series}×${ex.reps} · ${ex.carga}kg · descanso ${ex.descanso}s`
+  if (isForca) meta = ex.is_biset
+    ? `${ex.series}×${ex.reps} · ${ex.carga}/${ex.carga_b}kg · descanso ${ex.descanso}s`
+    : `${ex.series}×${ex.reps} · ${ex.carga}kg · descanso ${ex.descanso}s`
   else if (isIso) meta = `${ex.series}×${ex.duracao_seg}s`
   else meta = ex.duracao_seg ? `${Math.round(ex.duracao_seg / 60)}min` : '—'
 
@@ -419,6 +452,11 @@ function ExercicioRow({
           {ex.nome}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {ex.is_biset && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: 'rgba(167,139,250,0.15)', color: '#A78BFA', letterSpacing: '0.08em' }}>
+              BISET
+            </span>
+          )}
           {ex.grupo && (
             <span style={{
               fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em',

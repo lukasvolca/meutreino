@@ -14,6 +14,7 @@ type Exercicio = Database['public']['Tables']['exercicios']['Row']
 interface SetState {
   done: boolean
   carga: number
+  carga_b: number
   reps: number
   duracaoSeg: number
   duracaoMin: number
@@ -21,16 +22,16 @@ interface SetState {
 
 function buildInitialSets(ex: Exercicio): SetState[] {
   if (ex.tipo === 'cardio') {
-    return [{ done: false, carga: 0, reps: 0, duracaoSeg: 0, duracaoMin: ex.duracao_min ?? 10 }]
+    return [{ done: false, carga: 0, carga_b: 0, reps: 0, duracaoSeg: 0, duracaoMin: ex.duracao_min ?? 10 }]
   }
   if (ex.tipo === 'iso') {
     return Array.from({ length: ex.series }, () => ({
-      done: false, carga: 0, reps: 0, duracaoSeg: ex.duracao_seg ?? 30, duracaoMin: 0,
+      done: false, carga: 0, carga_b: 0, reps: 0, duracaoSeg: ex.duracao_seg ?? 30, duracaoMin: 0,
     }))
   }
   const reps = parseInt(String(ex.reps ?? '10').split('-')[0]) || 10
   return Array.from({ length: ex.series }, () => ({
-    done: false, carga: ex.carga, reps, duracaoSeg: 0, duracaoMin: 0,
+    done: false, carga: ex.carga, carga_b: ex.carga_b ?? 0, reps, duracaoSeg: 0, duracaoMin: 0,
   }))
 }
 
@@ -82,8 +83,8 @@ function InlineNumber({ value, onChange, suffix, width = 56, color, fontSize = 1
 }
 
 // ── SetRow ─────────────────────────────────────────────────────────────────────
-function SetRow({ idx, set, tipo, accent, onToggle, onUpdate }: {
-  idx: number, set: SetState, tipo: string, accent: string,
+function SetRow({ idx, set, tipo, accent, isBiset, onToggle, onUpdate }: {
+  idx: number, set: SetState, tipo: string, accent: string, isBiset: boolean,
   onToggle: () => void, onUpdate: (patch: Partial<SetState>) => void,
 }) {
   const done = set.done
@@ -120,6 +121,27 @@ function SetRow({ idx, set, tipo, accent, onToggle, onUpdate }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <InlineNumber value={set.duracaoMin} onChange={v => onUpdate({ duracaoMin: v })} width={56} fontSize={14}/>
         <span style={unitStyle}>min</span>
+      </div>
+      {checkBtn}
+    </div>
+  )
+
+  if (isBiset) return (
+    <div style={{ ...base, gridTemplateColumns: '28px 1fr auto auto 36px' }}>
+      <div style={labelStyle}>S{idx + 1}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={42} fontSize={14}/>
+        <span style={unitStyle}>reps</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ ...unitStyle, fontSize: 9, letterSpacing: '0.1em' }}>A</span>
+        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={46} fontSize={14}/>
+        <span style={unitStyle}>kg</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ ...unitStyle, fontSize: 9, letterSpacing: '0.1em' }}>B</span>
+        <InlineNumber value={set.carga_b} onChange={v => onUpdate({ carga_b: v })} width={46} fontSize={14}/>
+        <span style={unitStyle}>kg</span>
       </div>
       {checkBtn}
     </div>
@@ -184,19 +206,16 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
     metaSummary = <span>{ex.series}×{ex.duracao_seg}s</span>
   } else {
     const lastCarga = sets[0]?.carga ?? ex.carga
+    const lastCargaB = sets[0]?.carga_b ?? ex.carga_b
     metaSummary = (
       <>
+        {ex.is_biset && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(167,139,250,0.18)', color: '#A78BFA', letterSpacing: '0.06em', marginRight: 2 }}>BISET</span>}
         <span>{ex.series}×{ex.reps}</span>
         <span style={{ color: 'var(--muted-3)' }}> · </span>
-        <span>{lastCarga}kg</span>
-        {delta != null && delta !== 0 && (
-          <>
-            <span style={{ color: 'var(--muted-3)' }}> · </span>
-            <span style={{ color: delta > 0 ? '#6dffb0' : '#ff5e5e', fontWeight: 700 }}>
-              {delta > 0 ? '+' : ''}{delta}
-            </span>
-          </>
-        )}
+        {ex.is_biset
+          ? <span>{lastCarga}/{lastCargaB}kg</span>
+          : <><span>{lastCarga}kg</span>{delta != null && delta !== 0 && (<><span style={{ color: 'var(--muted-3)' }}> · </span><span style={{ color: delta > 0 ? '#6dffb0' : '#ff5e5e', fontWeight: 700 }}>{delta > 0 ? '+' : ''}{delta}</span></>)}</>
+        }
       </>
     )
   }
@@ -301,17 +320,25 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
       {expanded && (
         <>
           <div style={{ padding: '0 16px 4px', animation: 'fade-in 200ms ease' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: (isCardio || isIso) ? '28px 1fr 36px' : '28px 1fr 1fr 36px', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8, paddingBottom: 6 }}>
+            <div style={{
+              display: 'grid', gap: 8,
+              gridTemplateColumns: isCardio || isIso ? '28px 1fr 36px'
+                : ex.is_biset ? '28px 1fr auto auto 36px'
+                : '28px 1fr 1fr 36px',
+              borderTop: '1px solid var(--border)', paddingTop: 8, paddingBottom: 6,
+            }}>
               {isCardio ? (
                 <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>—</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>DURAÇÃO</div><div/></>
               ) : isIso ? (
                 <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>TEMPO</div><div/></>
+              ) : ex.is_biset ? (
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA A</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA B</div><div/></>
               ) : (
                 <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA</div><div/></>
               )}
             </div>
             {sets.map((s, i) => (
-              <SetRow key={i} idx={i} set={s} tipo={tipo} accent={accent}
+              <SetRow key={i} idx={i} set={s} tipo={tipo} accent={accent} isBiset={!!ex.is_biset}
                 onToggle={() => {
                   onUpdateSet(i, { done: !s.done })
                   if (!s.done && !isCardio) onStartRest(ex.descanso ?? 60)
@@ -477,6 +504,8 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
   const [series, setSeries] = useState(String(ex?.series ?? 3))
   const [reps, setReps] = useState(ex?.reps ?? '10-12')
   const [carga, setCarga] = useState(String(ex?.carga ?? 0))
+  const [isBiset, setIsBiset] = useState(ex?.is_biset ?? false)
+  const [cargaB, setCargaB] = useState(String(ex?.carga_b ?? 0))
   const [descanso, setDescanso] = useState(String(ex?.descanso ?? 60))
   const [ytId, setYtId] = useState(ex?.yt_id ?? '')
   const [saving, setSaving] = useState(false)
@@ -488,6 +517,8 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
       nome: nome.trim(), grupo: grupo.trim() || null,
       series: parseInt(series) || 3, reps,
       carga: parseFloat(carga.replace(',', '.')) || 0,
+      is_biset: isBiset,
+      carga_b: isBiset ? (parseFloat(cargaB.replace(',', '.')) || 0) : 0,
       descanso: parseInt(descanso) || 60,
       yt_id: ytId.trim() || null,
       tipo: 'forca',
@@ -535,7 +566,7 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
             {[
               { label: 'Séries', value: series, set: setSeries, mode: 'numeric' as const },
               { label: 'Reps', value: reps, set: setReps, mode: undefined },
-              { label: 'Carga kg', value: carga, set: setCarga, mode: 'decimal' as const },
+              { label: isBiset ? 'Carga A kg' : 'Carga kg', value: carga, set: setCarga, mode: 'decimal' as const },
               { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' as const },
             ].map(({ label, value, set, mode }) => (
               <div key={label}>
@@ -545,6 +576,33 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
                 />
               </div>
             ))}
+          </div>
+          {/* Biset toggle + Carga B */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => setIsBiset(b => !b)}
+              style={{
+                height: 36, padding: '0 14px', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                background: isBiset ? 'rgba(167,139,250,0.15)' : 'var(--surface-2)',
+                border: `1px solid ${isBiset ? '#A78BFA' : 'var(--border)'}`,
+                color: isBiset ? '#A78BFA' : 'var(--muted)',
+                fontFamily: 'var(--font-mono)', letterSpacing: '0.08em',
+                transition: 'all 150ms', flexShrink: 0,
+              }}
+            >
+              {isBiset ? '✓ BISET' : '+ BISET'}
+            </button>
+            {isBiset && (
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A78BFA', marginBottom: 4 }}>Carga B kg</div>
+                <input
+                  type="text" inputMode="decimal" value={cargaB}
+                  onChange={e => setCargaB(e.target.value)}
+                  style={{ width: '100%', height: 40, textAlign: 'center', background: 'rgba(167,139,250,0.08)', border: '1px solid #A78BFA60', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 14, background: 'var(--surface-3)', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer', border: 'none' }}>
@@ -1043,6 +1101,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
                   return {
                     done: false,
                     carga: saved.carga,
+                    carga_b: saved.carga_b ?? 0,
                     reps: baseReps,
                     duracaoSeg: saved.duracao_seg ?? 30,
                     duracaoMin: saved.duracao_min ?? 10,

@@ -78,6 +78,8 @@ export interface Database {
           duracao_min: number | null
           intensidade: string | null
           yt_id: string | null
+          is_biset: boolean
+          carga_b: number
           ordem: number
           created_at: string
         }
@@ -95,6 +97,8 @@ export interface Database {
           duracao_min?: number | null
           intensidade?: string | null
           yt_id?: string | null
+          is_biset?: boolean
+          carga_b?: number
           ordem?: number
           created_at?: string
         }
@@ -110,6 +114,8 @@ export interface Database {
           duracao_min?: number | null
           intensidade?: string | null
           yt_id?: string | null
+          is_biset?: boolean
+          carga_b?: number
           ordem?: number
         }
         Relationships: []
