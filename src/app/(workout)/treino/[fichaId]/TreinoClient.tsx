@@ -231,7 +231,7 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
         borderRadius: 20, overflow: 'hidden', transition: isDragging ? 'none' : 'border-color 200ms, transform 180ms',
         position: 'relative',
         transform,
-        zIndex: isDragging ? 50 : 1,
+        zIndex: isDragging ? 50 : 'auto',
         opacity: isDragging ? 0.96 : 1,
         boxShadow: isDragging ? '0 12px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3)' : 'none',
         willChange: isDragging ? 'transform' : undefined,
@@ -508,6 +508,10 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
   const [cargaB, setCargaB] = useState(String(ex?.carga_b ?? 0))
   const [descanso, setDescanso] = useState(String(ex?.descanso ?? 60))
   const [ytId, setYtId] = useState(ex?.yt_id ?? '')
+  const [tipo, setTipo] = useState(ex?.tipo ?? 'forca')
+  const [duracaoSeg, setDuracaoSeg] = useState(String(ex?.duracao_seg ?? 30))
+  const [duracaoMin, setDuracaoMin] = useState(String(ex?.duracao_min ?? 10))
+  const [intensidade, setIntensidade] = useState(ex?.intensidade ?? '')
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -515,13 +519,17 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
     setSaving(true)
     const updatePayload = {
       nome: nome.trim(), grupo: grupo.trim() || null,
-      series: parseInt(series) || 3, reps,
-      carga: parseFloat(carga.replace(',', '.')) || 0,
-      is_biset: isBiset,
-      carga_b: isBiset ? (parseFloat(cargaB.replace(',', '.')) || 0) : 0,
+      tipo,
+      series: parseInt(series) || 3,
+      reps: tipo === 'forca' ? reps : '0',
+      carga: tipo === 'forca' ? (parseFloat(carga.replace(',', '.')) || 0) : 0,
+      is_biset: tipo === 'forca' && isBiset,
+      carga_b: tipo === 'forca' && isBiset ? (parseFloat(cargaB.replace(',', '.')) || 0) : 0,
       descanso: parseInt(descanso) || 60,
       yt_id: ytId.trim() || null,
-      tipo: 'forca',
+      duracao_seg: tipo === 'iso' ? (parseInt(duracaoSeg) || 30) : null,
+      duracao_min: tipo === 'cardio' ? (parseInt(duracaoMin) || 10) : null,
+      intensidade: tipo === 'cardio' ? (intensidade.trim() || null) : null,
     }
     let data: Exercicio | null = null
     if (ex?.id) {
@@ -562,22 +570,72 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
               />
             </div>
           ))}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-            {[
-              { label: 'Séries', value: series, set: setSeries, mode: 'numeric' as const },
-              { label: 'Reps', value: reps, set: setReps, mode: undefined },
-              { label: isBiset ? 'Carga A kg' : 'Carga kg', value: carga, set: setCarga, mode: 'decimal' as const },
-              { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' as const },
-            ].map(({ label, value, set, mode }) => (
-              <div key={label}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{label}</div>
-                <input type="text" inputMode={mode} value={value} onChange={e => set(e.target.value)}
-                  style={{ width: '100%', height: 40, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
+          {/* Tipo selector */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {([['forca', 'FORÇA · KG'], ['iso', 'ISO · SEG'], ['cardio', 'CARDIO · MIN']] as [string, string][]).map(([val, lbl]) => (
+              <button key={val} type="button" onClick={() => setTipo(val)}
+                style={{
+                  flex: 1, height: 34, borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                  background: tipo === val ? 'rgba(255,255,255,0.08)' : 'var(--surface-2)',
+                  border: `1px solid ${tipo === val ? 'var(--accent)' : 'var(--border)'}`,
+                  color: tipo === val ? 'var(--text)' : 'var(--muted)',
+                  transition: 'all 150ms',
+                }}
+              >{lbl}</button>
             ))}
           </div>
-          {/* Biset toggle + Carga B */}
+          {tipo === 'forca' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+              {([
+                { label: 'Séries', value: series, set: setSeries, mode: 'numeric' },
+                { label: 'Reps', value: reps, set: setReps, mode: undefined },
+                { label: isBiset ? 'Carga A kg' : 'Carga kg', value: carga, set: setCarga, mode: 'decimal' },
+                { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' },
+              ] as { label: string; value: string; set: (v: string) => void; mode: React.HTMLAttributes<HTMLInputElement>['inputMode'] }[]).map(({ label, value, set, mode }) => (
+                <div key={label}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{label}</div>
+                  <input type="text" inputMode={mode} value={value} onChange={e => set(e.target.value)}
+                    style={{ width: '100%', height: 40, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {tipo === 'iso' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {([
+                { label: 'Séries', value: series, set: setSeries, mode: 'numeric' },
+                { label: 'Duração seg', value: duracaoSeg, set: setDuracaoSeg, mode: 'numeric' },
+                { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' },
+              ] as { label: string; value: string; set: (v: string) => void; mode: React.HTMLAttributes<HTMLInputElement>['inputMode'] }[]).map(({ label, value, set, mode }) => (
+                <div key={label}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{label}</div>
+                  <input type="text" inputMode={mode} value={value} onChange={e => set(e.target.value)}
+                    style={{ width: '100%', height: 40, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {tipo === 'cardio' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {([
+                { label: 'Duração min', value: duracaoMin, set: setDuracaoMin, mode: 'numeric' },
+                { label: 'Intensidade', value: intensidade, set: setIntensidade, mode: undefined },
+                { label: 'Descanso s', value: descanso, set: setDescanso, mode: 'numeric' },
+              ] as { label: string; value: string; set: (v: string) => void; mode: React.HTMLAttributes<HTMLInputElement>['inputMode'] }[]).map(({ label, value, set, mode }) => (
+                <div key={label}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{label}</div>
+                  <input type="text" inputMode={mode} value={value} onChange={e => set(e.target.value)}
+                    style={{ width: '100%', height: 40, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Biset toggle + Carga B — only for forca */}
+          {tipo === 'forca' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
             <button
               type="button"
@@ -604,6 +662,7 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
               </div>
             )}
           </div>
+          )}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 14, background: 'var(--surface-3)', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer', border: 'none' }}>
               Cancelar
