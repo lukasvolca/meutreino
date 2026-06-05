@@ -700,6 +700,9 @@ function Toast({ message }: { message: string }) {
   )
 }
 
+const ICONES_TREINO = ['💪','🏋️','🔥','⚡','🎯','🏃','🦵','🤸','🧘','🚴','🥊','🏆','🌟','💯','⚽','🏊','🧗','🎽','🦾','🧠','❤️','🌊','🏔️','🎖️','🥗','🫀','⏱️','🎪','🩺','🏇']
+const LETRAS_TREINO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
 // ── Drag state types ───────────────────────────────────────────────────────────
 interface DragInfo {
   id: string
@@ -734,6 +737,16 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [confirmDeleteEx, setConfirmDeleteEx] = useState<Exercicio | null>(null)
   const [deletingExId, setDeletingExId] = useState<string | null>(null)
   const [duplicatingExId, setDuplicatingExId] = useState<string | null>(null)
+
+  const [fichaLocal, setFichaLocal] = useState({ nome: ficha.nome, icone: ficha.icone ?? '', letra: ficha.letra ?? '' })
+  const [editingName, setEditingName] = useState(false)
+  const [editNameDraft, setEditNameDraft] = useState(ficha.nome)
+  const [showIconPicker, setShowIconPicker] = useState(false)
+
+  async function saveFichaField(patch: { nome?: string; icone?: string | null; letra?: string }) {
+    setFichaLocal(prev => ({ ...prev, ...patch, icone: patch.icone ?? (patch.icone === null ? '' : prev.icone) }))
+    await supabase.from('fichas').update(patch).eq('id', ficha.id)
+  }
 
   const startTimeRef = useRef(Date.now())
   const [elapsedSec, setElapsedSec] = useState(0)
@@ -1011,15 +1024,49 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
 
         {/* Ficha identity row: icon + name + groups */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-          <div style={{
+          <button onClick={() => setShowIconPicker(true)} style={{
             width: 52, height: 52, borderRadius: 16, flexShrink: 0,
             background: `${accent}1a`, border: `1px solid ${accent}30`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', padding: 0,
           }}>
-            <Icon name="dumbbell" size={26} color={accent}/>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{ficha.nome}</div>
+            {fichaLocal.icone
+              ? <span style={{ fontSize: 26, lineHeight: 1 }}>{fichaLocal.icone}</span>
+              : <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 22, color: accent }}>{fichaLocal.letra}</span>
+            }
+          </button>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {editingName ? (
+              <input
+                autoFocus
+                value={editNameDraft}
+                onChange={e => setEditNameDraft(e.target.value)}
+                onBlur={() => {
+                  setEditingName(false)
+                  const trimmed = editNameDraft.trim()
+                  if (trimmed && trimmed !== fichaLocal.nome) saveFichaField({ nome: trimmed })
+                  else setEditNameDraft(fichaLocal.nome)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') e.currentTarget.blur()
+                  if (e.key === 'Escape') { setEditNameDraft(fichaLocal.nome); setEditingName(false) }
+                }}
+                style={{
+                  width: '100%', background: 'transparent',
+                  border: 'none', borderBottom: `1px solid ${accent}`,
+                  color: 'var(--text)', outline: 'none',
+                  fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26,
+                  letterSpacing: '-0.02em', lineHeight: 1.1, padding: '0 0 2px',
+                }}
+              />
+            ) : (
+              <div
+                onClick={() => { setEditingName(true); setEditNameDraft(fichaLocal.nome) }}
+                style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, letterSpacing: '-0.02em', lineHeight: 1.1, cursor: 'text' }}
+              >
+                {fichaLocal.nome}
+              </div>
+            )}
             {gruposList && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {gruposList}
@@ -1178,6 +1225,47 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         />
       )}
       {toast && <Toast message={toast}/>}
+
+      {/* ── Icon picker ── */}
+      {showIconPicker && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
+          <div onClick={() => setShowIconPicker(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)', animation: 'fade-in 180ms ease' }}/>
+          <div style={{
+            position: 'relative', width: '100%', background: 'var(--surface-1)',
+            borderRadius: '24px 24px 0 0', border: '1px solid var(--border-strong)',
+            padding: '16px 20px 32px', maxHeight: '70vh', overflowY: 'auto',
+            animation: 'slide-up 240ms cubic-bezier(.2,.7,.3,1)',
+          }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 16px' }}/>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 14 }}>Ícone da ficha</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 16 }}>
+              {ICONES_TREINO.map(ic => (
+                <button key={ic} onClick={() => { saveFichaField({ icone: ic }); setShowIconPicker(false) }} style={{
+                  height: 48, borderRadius: 12, fontSize: 24,
+                  background: fichaLocal.icone === ic ? `${accent}22` : 'var(--surface-2)',
+                  border: `1px solid ${fichaLocal.icone === ic ? accent : 'var(--border)'}`,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{ic}</button>
+              ))}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--muted-2)', marginBottom: 8 }}>LETRA</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              {LETRAS_TREINO.map(l => {
+                const active = !fichaLocal.icone && fichaLocal.letra === l
+                return (
+                  <button key={l} onClick={() => { saveFichaField({ icone: null, letra: l }); setShowIconPicker(false) }} style={{
+                    height: 40, borderRadius: 10,
+                    fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14,
+                    background: active ? `${accent}22` : 'var(--surface-2)',
+                    border: `1px solid ${active ? accent : 'var(--border)'}`,
+                    color: active ? accent : 'var(--text)', cursor: 'pointer',
+                  }}>{l}</button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete exercise confirm ── */}
       {confirmDeleteEx && (
