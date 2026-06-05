@@ -206,6 +206,35 @@ export interface Database {
         }
         Relationships: []
       }
+      exercise_notes: {
+        Row: {
+          id: string
+          user_id: string
+          trainer_id: string | null
+          exercicio_id: string | null
+          exercicio_nome: string | null
+          ficha_id: string | null
+          texto: string
+          lida: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          trainer_id?: string | null
+          exercicio_id?: string | null
+          exercicio_nome?: string | null
+          ficha_id?: string | null
+          texto: string
+          lida?: boolean
+          created_at?: string
+        }
+        Update: {
+          texto?: string
+          lida?: boolean
+        }
+        Relationships: []
+      }
       medidas: {
         Row: {
           id: string

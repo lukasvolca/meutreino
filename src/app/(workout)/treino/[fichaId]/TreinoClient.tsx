@@ -174,7 +174,7 @@ const cardActionBtn: React.CSSProperties = {
 function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   isDragging, translateY, shiftY,
   onDragHandleDown, cardRef,
-  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onStartRest,
+  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onNote, onStartRest,
 }: {
   ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
   historico: number[],
@@ -186,6 +186,7 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   onAddSet: () => void, onRemoveSet: () => void,
   onPlayVideo: () => void, onEdit: () => void,
   onDuplicate: () => void, onDelete: () => void, isDuplicating: boolean,
+  onNote: () => void,
   onStartRest: (sec: number) => void,
 }) {
   const completedSets = sets.filter(s => s.done).length
@@ -276,6 +277,16 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
           <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {/* Observação */}
+            <button
+              onClick={e => { e.stopPropagation(); onNote() }}
+              title="Observação"
+              style={cardActionBtn}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
             {/* Duplicate */}
             <button
               onClick={e => { e.stopPropagation(); onDuplicate() }}
@@ -682,6 +693,103 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
   )
 }
 
+// ── NoteModal ─────────────────────────────────────────────────────────────────
+function NoteModal({ ex, ficha, userId, trainerId, onClose, onSaved }: {
+  ex: Exercicio, ficha: { id: string; nome: string }, userId: string,
+  trainerId: string | null,
+  onClose: () => void, onSaved: () => void,
+}) {
+  const supabase = createClient()
+  const [texto, setTexto] = useState('')
+  const [saving, setSaving] = useState(false)
+  const hasTrainer = !!trainerId
+
+  async function handleSave() {
+    if (!texto.trim()) return
+    setSaving(true)
+    await supabase.from('exercise_notes').insert({
+      user_id: userId,
+      trainer_id: trainerId ?? null,
+      exercicio_id: ex.id,
+      exercicio_nome: ex.nome,
+      ficha_id: ficha.id,
+      texto: texto.trim(),
+    })
+    setSaving(false)
+    onSaved()
+  }
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', animation: 'fade-in 200ms ease' }}/>
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'var(--surface-1)', borderRadius: '24px 24px 0 0',
+        border: '1px solid var(--border)', borderBottom: 'none',
+        padding: '12px 0 32px',
+        animation: 'slide-up 250ms cubic-bezier(.2,.7,.3,1)',
+      }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.18)', margin: '0 auto 16px' }}/>
+        <div style={{ padding: '0 20px 4px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em' }}>
+              Observação
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.04em' }}>
+              {ex.nome}
+            </div>
+          </div>
+          {hasTrainer && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+              borderRadius: 8, background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.25)',
+              fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
+              color: '#00E5FF', letterSpacing: '0.06em', flexShrink: 0,
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
+              </svg>
+              ENVIARÁ AO PERSONAL
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '14px 20px 0' }}>
+          <textarea
+            autoFocus
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            placeholder={hasTrainer
+              ? 'Ex: Sinto dor no ombro nesse exercício, posso substituir?'
+              : 'Ex: Lembrar de ajustar a posição do banco...'}
+            rows={4}
+            style={{
+              width: '100%', padding: '12px 14px', boxSizing: 'border-box',
+              background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+              borderRadius: 14, color: 'var(--text)', fontSize: 14, lineHeight: 1.6,
+              outline: 'none', resize: 'none', fontFamily: 'inherit',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <button onClick={onClose} style={{
+              flex: 1, height: 48, borderRadius: 14, background: 'var(--surface-3)',
+              border: 'none', color: 'var(--muted)', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            }}>Cancelar</button>
+            <button onClick={handleSave} disabled={saving || !texto.trim()} style={{
+              flex: 2, height: 48, borderRadius: 14,
+              background: hasTrainer ? '#00E5FF' : 'var(--accent)',
+              color: 'var(--accent-ink)', fontWeight: 700, fontSize: 14,
+              border: 'none', cursor: saving || !texto.trim() ? 'not-allowed' : 'pointer',
+              opacity: saving || !texto.trim() ? 0.5 : 1,
+            }}>
+              {saving ? 'Enviando…' : hasTrainer ? 'Enviar ao personal' : 'Salvar anotação'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Toast ──────────────────────────────────────────────────────────────────────
 function Toast({ message }: { message: string }) {
   return (
@@ -739,6 +847,8 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [confirmDeleteEx, setConfirmDeleteEx] = useState<Exercicio | null>(null)
   const [deletingExId, setDeletingExId] = useState<string | null>(null)
   const [duplicatingExId, setDuplicatingExId] = useState<string | null>(null)
+  const [noteEx, setNoteEx] = useState<Exercicio | null>(null)
+  const [trainerId, setTrainerId] = useState<string | null>(null)
 
   const [fichaLocal, setFichaLocal] = useState({ nome: ficha.nome, icone: ficha.icone ?? '', letra: ficha.letra ?? '' })
   const [editingName, setEditingName] = useState(false)
@@ -771,6 +881,17 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
       startTimeRef.current = t
       setActiveSession({ fichaId: ficha.id, fichaLetra: ficha.letra ?? '', cor: ficha.cor ?? '', startTime: t })
     }
+  }, []) // eslint-disable-line
+
+  // Fetch linked trainer (if any)
+  useEffect(() => {
+    supabase.from('trainer_student_links')
+      .select('trainer_id')
+      .eq('student_id', userId)
+      .eq('status', 'approved')
+      .limit(1)
+      .single()
+      .then(({ data }) => { if (data) setTrainerId(data.trainer_id) })
   }, []) // eslint-disable-line
 
   // Drag state
@@ -1151,6 +1272,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
                 onDuplicate={() => duplicateEx(ex)}
                 onDelete={() => setConfirmDeleteEx(ex)}
                 isDuplicating={duplicatingExId === ex.id}
+                onNote={() => setNoteEx(ex)}
                 onStartRest={startRest}
               />
             )
@@ -1193,6 +1315,16 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
       </div>
 
       {/* ── Overlays ── */}
+      {noteEx && (
+        <NoteModal
+          ex={noteEx}
+          ficha={{ id: ficha.id, nome: fichaLocal.nome }}
+          userId={userId}
+          trainerId={trainerId}
+          onClose={() => setNoteEx(null)}
+          onSaved={() => { setNoteEx(null); setToast(trainerId ? 'Observação enviada ao personal ✓' : 'Anotação salva ✓') }}
+        />
+      )}
       {videoEx && <VideoModal ex={videoEx} onClose={() => setVideoEx(null)}/>}
       {(showNewEx || editorEx) && (
         <ExerciseEditor
