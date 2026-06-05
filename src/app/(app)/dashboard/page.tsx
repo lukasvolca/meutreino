@@ -4,6 +4,13 @@ import Icon from '@/components/icons'
 import { BarChart } from '@/components/charts'
 import DashboardHeroButton from './DashboardHeroButton'
 
+const SVG_ICON_NAMES = new Set(['dumbbell','benchPress','bicep','squat','flame','bolt','target','trophy','timer','body','chart','history','calendar','apple','home','play','check','settings','bell','user','camera','youtube','search','swap','more','info'])
+function renderFichaIcon(icone: string | null, size: number, color: string, strokeWidth = 1.8) {
+  if (!icone) return <Icon name="dumbbell" size={size} color={color} strokeWidth={strokeWidth}/>
+  if (SVG_ICON_NAMES.has(icone)) return <Icon name={icone} size={size} color={color} strokeWidth={strokeWidth}/>
+  return <span style={{ fontSize: size * 1.1, lineHeight: 1 }}>{icone}</span>
+}
+
 // Helper: get Monday-based week key (YYYY-MM-DD)
 function weekKey(dateStr: string) {
   const d = new Date(dateStr + 'T12:00:00')
@@ -188,10 +195,10 @@ export default async function DashboardPage() {
                     )}
                   </div>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 32, letterSpacing: '-0.03em', lineHeight: 1 }}>
-                    Ficha {fichaHoje.letra}
+                    {fichaHoje.nome}
                   </div>
-                  <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13, fontWeight: 500 }}>
-                    {fichaHoje.nome.split(' · ').slice(1).join(' · ')}
+                  <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--muted-2)', letterSpacing: '0.08em' }}>FICHA {fichaHoje.letra}</span>
                   </div>
                 </div>
                 <div style={{
@@ -200,7 +207,7 @@ export default async function DashboardPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: `0 8px 20px ${fichaHoje.cor}40`,
                 }}>
-                  <Icon name={fichaHoje.icone ?? 'dumbbell'} size={34} color="var(--accent-ink)" strokeWidth={1.9}/>
+                  {renderFichaIcon(fichaHoje.icone, 34, 'var(--accent-ink)', 1.9)}
                 </div>
               </div>
 
@@ -340,14 +347,12 @@ export default async function DashboardPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
                 }}>
-                  <Icon name={f.icone ?? 'dumbbell'} size={26}
-                    color={isHoje ? 'var(--accent-ink)' : 'var(--muted)'}
-                    strokeWidth={1.8}/>
+                  {renderFichaIcon(f.icone, 26, isHoje ? 'var(--accent-ink)' : 'var(--muted)')}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}>
-                      Ficha {f.letra}
+                      {f.nome}
                     </span>
                     {isHoje && !treinoHoje && (
                       <span style={{
@@ -367,8 +372,8 @@ export default async function DashboardPage() {
                       }}>✓ FEITO</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {f.nome.split(' · ').slice(1).join(' · ')}
+                  <div style={{ fontSize: 12, color: 'var(--muted-2)', marginTop: 2, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                    FICHA {f.letra}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', letterSpacing: '0.06em' }}>
                     <span>{exCountMap[f.id] ?? 0} EXS</span>

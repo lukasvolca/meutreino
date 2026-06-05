@@ -748,6 +748,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   async function saveFichaField(patch: { nome?: string; icone?: string | null; letra?: string }) {
     setFichaLocal(prev => ({ ...prev, ...patch, icone: patch.icone ?? (patch.icone === null ? '' : prev.icone) }))
     await supabase.from('fichas').update(patch).eq('id', ficha.id)
+    router.refresh()
   }
 
   const startTimeRef = useRef(Date.now())
