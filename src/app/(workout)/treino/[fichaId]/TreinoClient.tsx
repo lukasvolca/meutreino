@@ -702,6 +702,8 @@ function Toast({ message }: { message: string }) {
 
 const ICONES_TREINO = ['💪','🏋️','🔥','⚡','🎯','🏃','🦵','🤸','🧘','🚴','🥊','🏆','🌟','💯','⚽','🏊','🧗','🎽','🦾','🧠','❤️','🌊','🏔️','🎖️','🥗','🫀','⏱️','🎪','🩺','🏇']
 const LETRAS_TREINO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const SVG_ICONES = ['dumbbell','benchPress','bicep','squat','flame','bolt','target','trophy','timer','body','chart','history','calendar','apple']
+function isSvgIcone(icone: string) { return SVG_ICONES.includes(icone) }
 
 // ── Drag state types ───────────────────────────────────────────────────────────
 interface DragInfo {
@@ -1031,7 +1033,9 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
             cursor: 'pointer', padding: 0,
           }}>
             {fichaLocal.icone
-              ? <span style={{ fontSize: 26, lineHeight: 1 }}>{fichaLocal.icone}</span>
+              ? isSvgIcone(fichaLocal.icone)
+                ? <Icon name={fichaLocal.icone} size={26} color={accent}/>
+                : <span style={{ fontSize: 26, lineHeight: 1 }}>{fichaLocal.icone}</span>
               : <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 22, color: accent }}>{fichaLocal.letra}</span>
             }
           </button>
@@ -1238,6 +1242,23 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
           }}>
             <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 16px' }}/>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 14 }}>Ícone da ficha</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--muted-2)', marginBottom: 8 }}>ÍCONES DO APP</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, marginBottom: 16 }}>
+              {SVG_ICONES.map(name => {
+                const active = fichaLocal.icone === name
+                return (
+                  <button key={name} onClick={() => { saveFichaField({ icone: name }); setShowIconPicker(false) }} style={{
+                    height: 48, borderRadius: 12,
+                    background: active ? `${accent}22` : 'var(--surface-2)',
+                    border: `1px solid ${active ? accent : 'var(--border)'}`,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Icon name={name} size={22} color={active ? accent : 'var(--muted)'}/>
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--muted-2)', marginBottom: 8 }}>EMOJIS</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 16 }}>
               {ICONES_TREINO.map(ic => (
                 <button key={ic} onClick={() => { saveFichaField({ icone: ic }); setShowIconPicker(false) }} style={{
