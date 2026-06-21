@@ -268,7 +268,7 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
           {allDone ? <Icon name="check" size={15} strokeWidth={2.8} color="currentColor"/> : String(idx + 1).padStart(2, '0')}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ex.nome}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2, ...(!expanded && { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }) }}>{ex.nome}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 3, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>
             {ex.grupo && <><span style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>{ex.grupo}</span><span style={{ color: 'var(--muted-3)' }}>·</span></>}
             {metaSummary}
@@ -277,44 +277,26 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
           <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {/* Observação */}
-            <button
-              onClick={e => { e.stopPropagation(); onNote() }}
-              title="Observação"
-              style={cardActionBtn}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
-            {/* Duplicate */}
-            <button
-              onClick={e => { e.stopPropagation(); onDuplicate() }}
-              disabled={isDuplicating}
-              title="Duplicar"
-              style={{ ...cardActionBtn, opacity: isDuplicating ? 0.4 : 1 }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-            </button>
-            {/* Edit */}
-            <button
-              onClick={e => { e.stopPropagation(); onEdit() }}
-              title="Editar"
-              style={cardActionBtn}
-            >
-              <Icon name="edit" size={12} color="currentColor"/>
-            </button>
-            {/* Delete */}
-            <button
-              onClick={e => { e.stopPropagation(); onDelete() }}
-              title="Excluir"
-              style={{ ...cardActionBtn, color: 'var(--danger)' }}
-            >
-              <Icon name="trash" size={12} color="currentColor"/>
-            </button>
+            {/* Buttons only visible when collapsed */}
+            {!expanded && <>
+              <button onClick={e => { e.stopPropagation(); onNote() }} title="Observação" style={cardActionBtn}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button onClick={e => { e.stopPropagation(); onDuplicate() }} disabled={isDuplicating} title="Duplicar" style={{ ...cardActionBtn, opacity: isDuplicating ? 0.4 : 1 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+              <button onClick={e => { e.stopPropagation(); onEdit() }} title="Editar" style={cardActionBtn}>
+                <Icon name="edit" size={12} color="currentColor"/>
+              </button>
+              <button onClick={e => { e.stopPropagation(); onDelete() }} title="Excluir" style={{ ...cardActionBtn, color: 'var(--danger)' }}>
+                <Icon name="trash" size={12} color="currentColor"/>
+              </button>
+            </>}
             {completedSets > 0 && (
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: allDone ? `${accent}24` : 'rgba(109,255,176,0.14)', color: allDone ? accent : '#6dffb0', letterSpacing: '0.04em' }}>
                 {completedSets}/{sets.length}
@@ -330,6 +312,30 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
       {/* Expanded */}
       {expanded && (
         <>
+          {/* Action buttons row */}
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, padding: '0 14px 10px 14px', borderTop: '1px solid var(--border)' }}>
+            <button onClick={e => { e.stopPropagation(); onNote() }} title="Observação" style={{ ...cardActionBtn, width: 'auto', height: 30, padding: '0 10px', gap: 5, fontSize: 12, fontWeight: 600 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              Obs.
+            </button>
+            <button onClick={e => { e.stopPropagation(); onDuplicate() }} disabled={isDuplicating} title="Duplicar" style={{ ...cardActionBtn, width: 'auto', height: 30, padding: '0 10px', gap: 5, fontSize: 12, fontWeight: 600, opacity: isDuplicating ? 0.4 : 1 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Duplicar
+            </button>
+            <button onClick={e => { e.stopPropagation(); onEdit() }} title="Editar" style={{ ...cardActionBtn, width: 'auto', height: 30, padding: '0 10px', gap: 5, fontSize: 12, fontWeight: 600 }}>
+              <Icon name="edit" size={12} color="currentColor"/>
+              Editar
+            </button>
+            <button onClick={e => { e.stopPropagation(); onDelete() }} title="Excluir" style={{ ...cardActionBtn, width: 'auto', height: 30, padding: '0 10px', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--danger)' }}>
+              <Icon name="trash" size={12} color="currentColor"/>
+              Excluir
+            </button>
+          </div>
           <div style={{ padding: '0 16px 4px', animation: 'fade-in 200ms ease' }}>
             <div style={{
               display: 'grid', gap: 8,
