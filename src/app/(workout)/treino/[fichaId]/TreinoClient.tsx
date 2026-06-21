@@ -600,7 +600,7 @@ function ChartModal({ nome, data, labels, accent, onClose }: {
         </div>
         {/* Chart */}
         <div style={{ padding: '0 18px 20px' }}>
-          <LineChart data={data} labels={labels} color={accent} unit="kg" chartId="chart-modal" responsive height={180}/>
+          <LineChart data={data} labels={labels} color={accent} unit="kg" chartId="chart-modal" responsive height={180} showPointLabels/>
         </div>
         {data.length < 2 && (
           <div style={{ padding: '0 18px 20px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-2)', textAlign: 'center' }}>

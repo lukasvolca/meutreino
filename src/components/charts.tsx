@@ -73,13 +73,15 @@ export function BarChart({ data, labels, width = 360, height = 90, color, respon
 }
 
 // ----- Large line chart with axes (used in Progresso, Corpo)
-export function LineChart({ data, labels, width = 340, height = 180, color, unit = 'kg', chartId = 'chart', responsive }: {
+export function LineChart({ data, labels, width = 340, height = 180, color, unit = 'kg', chartId = 'chart', responsive, showPointLabels }: {
   data: number[], labels?: string[], width?: number, height?: number,
-  color?: string, unit?: string, chartId?: string, responsive?: boolean
+  color?: string, unit?: string, chartId?: string, responsive?: boolean, showPointLabels?: boolean
 }) {
   if (!data.length) return null
   const acc = color || 'var(--accent)'
-  const padL = 36, padR = 16, padT = 16, padB = 28
+  // When showing point labels we don't need left padding for Y-axis text
+  const padL = showPointLabels ? 12 : 36
+  const padR = 12, padT = showPointLabels ? 20 : 16, padB = 28
   const w = width - padL - padR
   const h = height - padT - padB
   const min = Math.floor(Math.min(...data) * 0.95)
@@ -115,8 +117,10 @@ export function LineChart({ data, labels, width = 340, height = 180, color, unit
             <line x1={padL} y1={y} x2={padL + w} y2={y}
               stroke="rgba(255,255,255,0.06)" strokeWidth="1"
               strokeDasharray={i === gridY ? '0' : '2,4'}/>
-            <text x={padL - 8} y={y + 3} fill="rgba(255,255,255,0.32)" fontSize="9"
-              textAnchor="end" fontFamily="var(--font-mono)">{v}</text>
+            {!showPointLabels && (
+              <text x={padL - 8} y={y + 3} fill="rgba(255,255,255,0.32)" fontSize="9"
+                textAnchor="end" fontFamily="var(--font-mono)">{v}</text>
+            )}
           </g>
         )
       })}
@@ -124,16 +128,31 @@ export function LineChart({ data, labels, width = 340, height = 180, color, unit
         fill={`url(#${gradId})`}/>
       <path d={d} fill="none" stroke={acc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         style={{ filter: `drop-shadow(0 0 6px ${acc}80)` }}/>
-      {points.map((p, i) => (
-        <g key={i}>
-          {i === points.length - 1 && <circle cx={p.x} cy={p.y} r="8" fill={acc} opacity="0.18"/>}
-          <circle cx={p.x} cy={p.y} r={i === points.length - 1 ? 4 : 2.5}
-            fill={i === points.length - 1 ? acc : 'var(--bg-app)'}
-            stroke={acc} strokeWidth="1.5"/>
-        </g>
-      ))}
-      <text x={lastP.x + 10} y={lastP.y + 4}
-        fill={acc} fontSize="11" fontFamily="var(--font-mono)" fontWeight="700">{lastP.v}{unit}</text>
+      {points.map((p, i) => {
+        const isLast = i === points.length - 1
+        // Place label above the point; if too close to top edge, place below
+        const labelAbove = p.y - padT > 16
+        return (
+          <g key={i}>
+            {isLast && <circle cx={p.x} cy={p.y} r="8" fill={acc} opacity="0.18"/>}
+            <circle cx={p.x} cy={p.y} r={isLast ? 4 : 2.5}
+              fill={isLast ? acc : 'var(--bg-app)'}
+              stroke={acc} strokeWidth="1.5"/>
+            {showPointLabels && (
+              <text
+                x={p.x}
+                y={labelAbove ? p.y - 8 : p.y + 16}
+                fill={acc} fontSize="10" textAnchor="middle"
+                fontFamily="var(--font-mono)" fontWeight="700"
+              >{p.v}{unit}</text>
+            )}
+          </g>
+        )
+      })}
+      {!showPointLabels && (
+        <text x={lastP.x + 10} y={lastP.y + 4}
+          fill={acc} fontSize="11" fontFamily="var(--font-mono)" fontWeight="700">{lastP.v}{unit}</text>
+      )}
       {labels && labels.length > 1 && [0, Math.floor((labels.length - 1) / 2), labels.length - 1].map(i => (
         <text key={i} x={points[i].x} y={padT + h + 16} fill="rgba(255,255,255,0.42)" fontSize="9"
           textAnchor={i === 0 ? 'start' : i === labels.length - 1 ? 'end' : 'middle'}
