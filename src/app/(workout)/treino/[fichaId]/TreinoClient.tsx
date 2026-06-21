@@ -833,6 +833,20 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [setsByEx, setSetsByEx] = useState<Record<string, SetState[]>>(() => {
     const m: Record<string, SetState[]> = {}
     for (const ex of exercicios) m[ex.id] = buildInitialSets(ex)
+    if (typeof window !== 'undefined') {
+      try {
+        const session = getActiveSession()
+        if (session?.fichaId === ficha.id) {
+          const saved = localStorage.getItem(`meutreino_sets_${ficha.id}`)
+          if (saved) {
+            const parsed = JSON.parse(saved) as Record<string, SetState[]>
+            for (const ex of exercicios) {
+              if (parsed[ex.id]) m[ex.id] = parsed[ex.id]
+            }
+          }
+        }
+      } catch {}
+    }
     return m
   })
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
@@ -912,6 +926,11 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
     const id = setTimeout(() => setToast(null), 2400)
     return () => clearTimeout(id)
   }, [toast])
+
+  // Persist set progress so a page refresh doesn't lose work
+  useEffect(() => {
+    localStorage.setItem(`meutreino_sets_${ficha.id}`, JSON.stringify(setsByEx))
+  }, [setsByEx]) // eslint-disable-line
 
   const allSets = Object.values(setsByEx).flat()
   const totalSets = allSets.length
@@ -1073,6 +1092,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   // ── Finalize ──────────────────────────────────────────────────────────────────
   async function finalizarTreino() {
     clearActiveSession()
+    localStorage.removeItem(`meutreino_sets_${ficha.id}`)
     setFinishing(true)
     const durMin = Math.max(1, Math.round(elapsedSec / 60))
     let volume = 0
