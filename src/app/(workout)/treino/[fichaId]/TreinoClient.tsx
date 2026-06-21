@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Icon from '@/components/icons'
-import { Sparkline } from '@/components/charts'
+import { Sparkline, LineChart } from '@/components/charts'
 import type { Database } from '@/lib/supabase/types'
 import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
 
@@ -174,7 +174,7 @@ const cardActionBtn: React.CSSProperties = {
 function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   isDragging, translateY, shiftY,
   onDragHandleDown, cardRef,
-  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onNote, onStartRest,
+  onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onNote, onStartRest, onOpenChart,
 }: {
   ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
   historico: number[],
@@ -188,7 +188,26 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   onDuplicate: () => void, onDelete: () => void, isDuplicating: boolean,
   onNote: () => void,
   onStartRest: (sec: number) => void,
+  onOpenChart: () => void,
 }) {
+  const [showActions, setShowActions] = useState(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const didLongPress = useRef(false)
+
+  useEffect(() => { if (expanded) setShowActions(false) }, [expanded])
+
+  function startLongPress() {
+    didLongPress.current = false
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true
+      setShowActions(s => !s)
+      navigator.vibrate?.(30)
+    }, 450)
+  }
+  function cancelLongPress() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+  }
+
   const completedSets = sets.filter(s => s.done).length
   const allDone = completedSets === sets.length && sets.length > 0
   const tipo = ex.tipo ?? 'forca'
@@ -241,13 +260,21 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
       {allDone && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, boxShadow: `0 0 12px ${accent}` }}/>}
 
       {/* Header */}
-      <div onClick={onToggleExpanded} style={{
-        padding: '12px 14px 12px 8px', display: 'flex', alignItems: 'center', gap: 8,
-        cursor: 'pointer', userSelect: 'none',
-      }}>
+      <div
+        onPointerDown={startLongPress}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onClick={() => {
+          if (didLongPress.current) { didLongPress.current = false; return }
+          if (showActions) { setShowActions(false); return }
+          onToggleExpanded()
+        }}
+        style={{ padding: '12px 14px 12px 8px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+      >
         {/* Drag handle — captures pointer events, stops card expand/collapse */}
         <div
-          onPointerDown={e => { e.stopPropagation(); onDragHandleDown(e) }}
+          onPointerDown={e => { e.stopPropagation(); cancelLongPress(); onDragHandleDown(e) }}
           onClick={e => e.stopPropagation()}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -275,28 +302,42 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-          <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {/* Buttons only visible when collapsed */}
-            {!expanded && <>
-              <button onClick={e => { e.stopPropagation(); onNote() }} title="Observação" style={cardActionBtn}>
+          {/* Top area: action buttons on long press, sparkline otherwise */}
+          {!expanded && showActions ? (
+            <div style={{ display: 'flex', gap: 3 }} onClick={e => e.stopPropagation()}>
+              <button onClick={e => { e.stopPropagation(); onNote(); setShowActions(false) }} title="Observação" style={cardActionBtn}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </button>
-              <button onClick={e => { e.stopPropagation(); onDuplicate() }} disabled={isDuplicating} title="Duplicar" style={{ ...cardActionBtn, opacity: isDuplicating ? 0.4 : 1 }}>
+              <button onClick={e => { e.stopPropagation(); onDuplicate(); setShowActions(false) }} disabled={isDuplicating} title="Duplicar" style={{ ...cardActionBtn, opacity: isDuplicating ? 0.4 : 1 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
               </button>
-              <button onClick={e => { e.stopPropagation(); onEdit() }} title="Editar" style={cardActionBtn}>
+              <button onClick={e => { e.stopPropagation(); onEdit(); setShowActions(false) }} title="Editar" style={cardActionBtn}>
                 <Icon name="edit" size={12} color="currentColor"/>
               </button>
-              <button onClick={e => { e.stopPropagation(); onDelete() }} title="Excluir" style={{ ...cardActionBtn, color: 'var(--danger)' }}>
+              <button onClick={e => { e.stopPropagation(); onDelete(); setShowActions(false) }} title="Excluir" style={{ ...cardActionBtn, color: 'var(--danger)' }}>
                 <Icon name="trash" size={12} color="currentColor"/>
               </button>
-            </>}
+            </div>
+          ) : (
+            historico.length > 1 ? (
+              <button
+                onClick={e => { e.stopPropagation(); onOpenChart() }}
+                onPointerDown={e => e.stopPropagation()}
+                style={{ background: 'none', border: 'none', padding: '4px 2px', cursor: 'pointer', display: 'block', borderRadius: 6 }}
+                title="Ver gráfico de progresso"
+              >
+                <Sparkline data={historico} width={46} height={18} color={accent}/>
+              </button>
+            ) : (
+              <Sparkline data={historico.length ? historico : [ex.carga, ex.carga]} width={46} height={18} color={accent}/>
+            )
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             {completedSets > 0 && (
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: allDone ? `${accent}24` : 'rgba(109,255,176,0.14)', color: allDone ? accent : '#6dffb0', letterSpacing: '0.04em' }}>
                 {completedSets}/{sets.length}
@@ -505,6 +546,67 @@ function VideoModal({ ex, onClose }: { ex: Exercicio, onClose: () => void }) {
             <Icon name="x" size={16} color="currentColor"/>
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ChartModal ─────────────────────────────────────────────────────────────────
+function ChartModal({ nome, data, labels, accent, onClose }: {
+  nome: string, data: number[], labels: string[], accent: string, onClose: () => void
+}) {
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const delta = data.length > 1 ? +(data[data.length - 1] - data[0]).toFixed(1) : null
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 100 }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', animation: 'fade-in 200ms ease' }}/>
+      <div style={{
+        position: 'absolute', top: '50%', left: 16, right: 16,
+        transform: 'translateY(-50%)',
+        background: 'var(--surface-1)', borderRadius: 24,
+        border: '1px solid var(--border-strong)',
+        animation: 'scale-in 250ms cubic-bezier(.2,.7,.3,1)',
+        boxShadow: '0 30px 60px rgba(0,0,0,0.6)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '18px 18px 12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: accent, fontWeight: 500 }}>PROGRESSO DE CARGA</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 19, letterSpacing: '-0.02em', marginTop: 3, lineHeight: 1.2 }}>{nome}</div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+            background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
+            color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <Icon name="x" size={16} color="currentColor"/>
+          </button>
+        </div>
+        {/* Stats row */}
+        <div style={{ display: 'flex', gap: 12, padding: '0 18px 16px' }}>
+          {[
+            { label: 'Mínimo', value: `${min}kg` },
+            { label: 'Máximo', value: `${max}kg` },
+            { label: 'Atual', value: `${data[data.length - 1]}kg` },
+            ...(delta != null ? [{ label: 'Evolução', value: `${delta > 0 ? '+' : ''}${delta}kg`, color: delta > 0 ? '#6dffb0' : delta < 0 ? '#ff5e5e' : 'var(--muted)' }] : []),
+          ].map(s => (
+            <div key={s.label} style={{ flex: 1, background: 'var(--surface-2)', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--muted-2)', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em', color: s.color ?? 'var(--text)' }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+        {/* Chart */}
+        <div style={{ padding: '0 18px 20px' }}>
+          <LineChart data={data} labels={labels} color={accent} unit="kg" chartId="chart-modal" responsive height={180}/>
+        </div>
+        {data.length < 2 && (
+          <div style={{ padding: '0 18px 20px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-2)', textAlign: 'center' }}>
+            Complete mais treinos para ver a evolução
+          </div>
+        )}
       </div>
     </div>
   )
@@ -830,7 +932,7 @@ interface DragInfo {
 // ── Main TreinoClient ──────────────────────────────────────────────────────────
 export default function TreinoClient({ ficha, exercicios, userId, historicoMap }: {
   ficha: Ficha, exercicios: Exercicio[], userId: string,
-  historicoMap: Record<string, number[]>
+  historicoMap: Record<string, { carga: number, date: string }[]>
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -869,6 +971,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [duplicatingExId, setDuplicatingExId] = useState<string | null>(null)
   const [noteEx, setNoteEx] = useState<Exercicio | null>(null)
   const [trainerId, setTrainerId] = useState<string | null>(null)
+  const [chartModal, setChartModal] = useState<{ nome: string, data: number[], labels: string[], accent: string } | null>(null)
 
   const [fichaLocal, setFichaLocal] = useState({ nome: ficha.nome, icone: ficha.icone ?? '', letra: ficha.letra ?? '' })
   const [editingName, setEditingName] = useState(false)
@@ -1280,7 +1383,19 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
                 sets={setsByEx[ex.id] ?? []}
                 expanded={expandedIds.has(ex.id)}
                 accent={accent}
-                historico={historicoMap[ex.id] ?? []}
+                historico={(historicoMap[ex.id] ?? []).map(h => h.carga)}
+                onOpenChart={() => {
+                  const h = historicoMap[ex.id] ?? []
+                  setChartModal({
+                    nome: ex.nome,
+                    data: h.map(x => x.carga),
+                    labels: h.map(x => {
+                      const d = new Date(x.date)
+                      return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+                    }),
+                    accent,
+                  })
+                }}
                 isDragging={isDragging}
                 translateY={translateY}
                 shiftY={shiftY}
@@ -1352,6 +1467,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         />
       )}
       {videoEx && <VideoModal ex={videoEx} onClose={() => setVideoEx(null)}/>}
+      {chartModal && <ChartModal {...chartModal} onClose={() => setChartModal(null)}/>}
       {(showNewEx || editorEx) && (
         <ExerciseEditor
           ex={editorEx ?? {}}

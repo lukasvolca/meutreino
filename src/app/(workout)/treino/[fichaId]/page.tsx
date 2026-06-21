@@ -17,7 +17,7 @@ export default async function TreinoPage({ params }: { params: Promise<{ fichaId
   const exIds = (exercicios ?? []).map(e => e.id)
 
   // Fetch last 6 carga values per exercise for sparklines
-  const historicoMap: Record<string, number[]> = {}
+  const historicoMap: Record<string, { carga: number, date: string }[]> = {}
   if (exIds.length > 0) {
     const { data: logs } = await supabase.from('sets_log')
       .select('exercicio_id, carga, created_at')
@@ -31,7 +31,7 @@ export default async function TreinoPage({ params }: { params: Promise<{ fichaId
     for (const row of logs ?? []) {
       if (!row.exercicio_id || row.carga == null) continue
       if (!historicoMap[row.exercicio_id]) historicoMap[row.exercicio_id] = []
-      historicoMap[row.exercicio_id].push(row.carga)
+      historicoMap[row.exercicio_id].push({ carga: row.carga, date: row.created_at })
     }
     for (const k of Object.keys(historicoMap)) {
       historicoMap[k] = historicoMap[k].slice(-6)
