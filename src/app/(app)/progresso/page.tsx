@@ -1,12 +1,24 @@
-import { createClient, getAuthUser } from '@/lib/supabase/server'
+'use client'
+
+import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/lib/session'
+import { useLoad } from '@/lib/load'
+import { PageSkeleton } from '@/components/Skeleton'
 import ProgressoClient, { type ExercicioProgresso } from './ProgressoClient'
 import { todayBR, addDays, mondayOf, isoDateBR } from '@/lib/date'
 
 const weekKey = mondayOf
 
-export default async function ProgressoPage() {
-  const supabase = await createClient()
-  const user = await getAuthUser()
+export default function ProgressoPage() {
+  const user = useUser()
+  const { data } = useLoad(() => carregar(user.id))
+  if (!data) return <PageSkeleton/>
+  return <Conteudo {...data}/>
+}
+
+async function carregar(uid: string) {
+  const supabase = createClient()
+
 
   const hoje = todayBR()
   const oneYearAgoStr = addDays(hoje, -365)
@@ -14,9 +26,9 @@ export default async function ProgressoPage() {
   const mesAtualStr = hoje.slice(0, 7)
 
   const [{ data: fichas }, { data: treinos }] = await Promise.all([
-    supabase.from('fichas').select('id, letra').eq('user_id', user!.id).order('ordem'),
+    supabase.from('fichas').select('id, letra').eq('user_id', uid).order('ordem'),
     supabase.from('treinos').select('data, volume_total')
-      .eq('user_id', user!.id)
+      .eq('user_id', uid)
       .gte('data', oneYearAgoStr)
       .order('data', { ascending: true }),
   ])
@@ -42,6 +54,13 @@ export default async function ProgressoPage() {
         .order('created_at', { ascending: true })
         .limit(exIds.length * 60)
     : { data: [] }
+
+  return { fichas, treinos, fichaMap, exercicios, setsLog }
+}
+
+function Conteudo({ fichas, treinos, fichaMap, exercicios, setsLog }: Awaited<ReturnType<typeof carregar>>) {
+  const hoje = todayBR()
+  const mesAtualStr = hoje.slice(0, 7)
 
   // Group max carga by week per exercise
   const weeklyMap: Record<string, Record<string, number[]>> = {}

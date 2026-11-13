@@ -1,4 +1,9 @@
-import { createClient, getAuthUser } from '@/lib/supabase/server'
+'use client'
+
+import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/lib/session'
+import { useLoad } from '@/lib/load'
+import { PageSkeleton } from '@/components/Skeleton'
 import Link from 'next/link'
 import Icon from '@/components/icons'
 import { BarChart } from '@/components/charts'
@@ -14,18 +19,25 @@ function renderFichaIcon(icone: string | null, size: number, color: string, stro
 
 const weekKey = mondayOf
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const user = await getAuthUser()
+export default function DashboardPage() {
+  const user = useUser()
+  const { data } = useLoad(() => carregar(user.id))
+  if (!data) return <PageSkeleton/>
+  return <Conteudo {...data}/>
+}
+
+async function carregar(uid: string) {
+  const supabase = createClient()
+
 
   const hoje = todayBR()
   const dataLimiteStr = addDays(hoje, -90)
 
   const [{ data: profile }, { data: fichas }, { data: treinos }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user!.id).single(),
-    supabase.from('fichas').select('*').eq('user_id', user!.id).order('ordem'),
+    supabase.from('profiles').select('*').eq('id', uid).single(),
+    supabase.from('fichas').select('*').eq('user_id', uid).order('ordem'),
     supabase.from('treinos').select('data, ficha_letra, ficha_id, duracao_min, volume_total')
-      .eq('user_id', user!.id)
+      .eq('user_id', uid)
       .gte('data', dataLimiteStr)
       .order('data', { ascending: false })
       .limit(90),
@@ -35,6 +47,12 @@ export default async function DashboardPage() {
   const { data: exerciciosCount } = fichaIds.length > 0
     ? await supabase.from('exercicios').select('ficha_id').in('ficha_id', fichaIds)
     : { data: [] }
+
+  return { profile, fichas, treinos, exerciciosCount }
+}
+
+function Conteudo({ profile, fichas, treinos, exerciciosCount }: Awaited<ReturnType<typeof carregar>>) {
+  const hoje = todayBR()
 
   // Count exercises per ficha
   const exCountMap: Record<string, number> = {}
@@ -147,7 +165,7 @@ export default async function DashboardPage() {
             boxShadow: '0 0 0 1px rgba(204,255,0,0.25), 0 8px 24px rgba(204,255,0,0.08)',
             overflow: 'hidden',
           }}>
-            <Link href={`/treino/${fichaHoje.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', padding: '18px 18px 14px' }}>
+            <Link href={`/treino/?id=${fichaHoje.id}`} style={{ display: 'block', textDecoration: 'none', color: 'inherit', padding: '18px 18px 14px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -309,7 +327,7 @@ export default async function DashboardPage() {
         {fichaList.map(f => {
           const isHoje = fichaHoje?.id === f.id
           return (
-            <Link key={f.id} href={`/treino/${f.id}`} style={{
+            <Link key={f.id} href={`/treino/?id=${f.id}`} style={{
               display: 'block', textDecoration: 'none',
               background: 'var(--surface-1)',
               border: `1px solid ${isHoje ? 'rgba(255,255,255,0.12)' : 'var(--border)'}`,

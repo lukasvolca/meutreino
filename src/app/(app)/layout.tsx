@@ -1,11 +1,9 @@
-import { getAuthUser } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
 import BottomNav from '@/components/BottomNav'
+import { AuthGate } from '@/lib/session'
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getAuthUser()
-  if (!user) redirect('/login')
-
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       position: 'relative',
@@ -25,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         paddingTop: 56,
         paddingBottom: 86,
       }}>
-        {children}
+        <AuthGate>{children}</AuthGate>
       </div>
       <BottomNav />
     </div>

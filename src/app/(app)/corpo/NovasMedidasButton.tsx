@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { refreshData } from '@/lib/load'
 
 const CAMPOS = [
   { key: 'peso', label: 'Peso (kg)', step: 0.1 },
@@ -32,7 +33,7 @@ export default function NovasMedidasButton({ userId }: { userId: string }) {
     setOpen(false)
     setValues({})
     setSaving(false)
-    router.refresh()
+    refreshData()
   }
 
   return (

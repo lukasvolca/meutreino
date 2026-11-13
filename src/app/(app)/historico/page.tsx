@@ -1,4 +1,9 @@
-import { createClient, getAuthUser } from '@/lib/supabase/server'
+'use client'
+
+import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/lib/session'
+import { useLoad } from '@/lib/load'
+import { PageSkeleton } from '@/components/Skeleton'
 import { todayBR } from '@/lib/date'
 import { Heatmap } from '@/components/charts'
 import Icon from '@/components/icons'
@@ -13,18 +18,29 @@ type TreinoRow = {
   fichas: { nome: string; icone: string | null } | null
 }
 
-export default async function HistoricoPage() {
-  const supabase = await createClient()
-  const user = await getAuthUser()
+export default function HistoricoPage() {
+  const user = useUser()
+  const { data } = useLoad(() => carregar(user.id))
+  if (!data) return <PageSkeleton/>
+  return <Conteudo {...data}/>
+}
+
+async function carregar(uid: string) {
+  const supabase = createClient()
+
 
   const { data: treinosRaw } = await supabase
     .from('treinos')
     .select('id, data, duracao_min, volume_total, teve_pr, ficha_letra, fichas(nome, icone)')
-    .eq('user_id', user!.id)
+    .eq('user_id', uid)
     .order('data', { ascending: false })
     .limit(120)
 
-  const treinos = (treinosRaw as TreinoRow[] | null) ?? []
+  return { treinosRaw }
+}
+
+function Conteudo({ treinosRaw }: Awaited<ReturnType<typeof carregar>>) {
+  const treinos = (treinosRaw as unknown as TreinoRow[] | null) ?? []
 
   const hoje = new Date(todayBR() + 'T12:00:00')
   // Filter to last 84 days (12 weeks) for stats + heatmap

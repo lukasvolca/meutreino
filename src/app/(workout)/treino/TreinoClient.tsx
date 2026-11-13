@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, limite } from '@/lib/supabase/client'
 import Icon from '@/components/icons'
 import { Sparkline, LineChart } from '@/components/charts'
 import type { Database } from '@/lib/supabase/types'
 import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
 import { todayBR } from '@/lib/date'
+import { refreshData } from '@/lib/load'
 
 type Ficha = Database['public']['Tables']['fichas']['Row']
 type Exercicio = Database['public']['Tables']['exercicios']['Row']
@@ -983,7 +984,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   async function saveFichaField(patch: { nome?: string; icone?: string | null; letra?: string }) {
     setFichaLocal(prev => ({ ...prev, ...patch, icone: patch.icone ?? (patch.icone === null ? '' : prev.icone) }))
     await supabase.from('fichas').update(patch).eq('id', ficha.id)
-    router.refresh()
+    refreshData()
   }
 
   const startTimeRef = useRef(Date.now())
@@ -1220,7 +1221,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         user_id: userId, ficha_id: ficha.id, ficha_letra: ficha.letra,
         data: todayBR(),
         duracao_min: durMin, volume_total: Math.round(volume),
-      }).select().single()
+      }).select().abortSignal(limite()).single()
       if (error || !treino) throw error ?? new Error('treino não salvo')
 
       const logs = exList.flatMap(ex => (setsByEx[ex.id] ?? []).map((s, i) => ({
@@ -1229,10 +1230,10 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         duracao_seg: ex.tipo === 'iso' ? s.duracaoSeg : null, done: s.done,
       })))
       if (logs.length > 0) {
-        const { error: logErr } = await supabase.from('sets_log').insert(logs)
+        const { error: logErr } = await supabase.from('sets_log').insert(logs).abortSignal(limite())
         if (logErr) {
           // Não deixa um treino "vazio" no histórico: desfaz e tenta de novo depois.
-          await supabase.from('treinos').delete().eq('id', treino.id)
+          await supabase.from('treinos').delete().eq('id', treino.id).abortSignal(limite())
           throw logErr
         }
       }
@@ -1253,8 +1254,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
       return [supabase.from('exercicios').update({ carga: avg }).eq('id', ex.id)]
     }))
 
-    router.push('/dashboard')
-    router.refresh()
+    router.push('/dashboard/')
   }
 
   const elMin = String(Math.floor(elapsedSec / 60)).padStart(2, '0')

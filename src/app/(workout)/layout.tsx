@@ -1,10 +1,8 @@
-import { getAuthUser } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
 
-export default async function WorkoutLayout({ children }: { children: React.ReactNode }) {
-  const user = await getAuthUser()
-  if (!user) redirect('/login')
+import { AuthGate } from '@/lib/session'
 
+export default function WorkoutLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       position: 'relative',
@@ -14,7 +12,7 @@ export default async function WorkoutLayout({ children }: { children: React.Reac
       overflow: 'hidden',
       background: 'var(--bg-app)',
     }}>
-      {children}
+      <AuthGate>{children}</AuthGate>
     </div>
   )
 }

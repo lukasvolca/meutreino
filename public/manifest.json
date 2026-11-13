@@ -2,7 +2,7 @@
   "name": "MeuTreino",
   "short_name": "MeuTreino",
   "description": "Seu app de treino personalizado",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard/",
   "display": "standalone",
   "background_color": "#0d0e12",
   "theme_color": "#0d0e12",

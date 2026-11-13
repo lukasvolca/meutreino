@@ -49,3 +49,8 @@ supabase/.temp/
 
 # claude code (local)
 .claude/
+
+# credenciais da API (HostGator)
+api/config.php
+scripts/.deploy.local.json
+/out/

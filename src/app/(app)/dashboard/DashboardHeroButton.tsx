@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
 import { todayBR } from '@/lib/date'
 import type { ActiveSession } from '@/lib/activeSession'
+import { refreshData } from '@/lib/load'
 
 interface Props {
   fichaId: string
@@ -75,7 +76,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
       const saved = localStorage.getItem(`meutreino_sets_${fichaId}`)
       const sets = saved ? Object.values(JSON.parse(saved) as Record<string, { done?: boolean }[]>).flat() : []
       if (sets.some(s => s?.done)) {
-        router.push(`/treino/${fichaId}`)
+        router.push(`/treino/?id=${fichaId}`)
         return
       }
     } catch {}
@@ -102,7 +103,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
     localStorage.removeItem(`meutreino_sets_${fichaId}`)
     setSession(null)
     setSaving(false)
-    router.refresh()
+    refreshData()
   }
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, '0')
@@ -112,7 +113,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
   // ── Completed today ──────────────────────────────────────────────────────────
   if (isCompleted) {
     return (
-      <Link href={`/treino/${fichaId}`} style={{
+      <Link href={`/treino/?id=${fichaId}`} style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         width: '100%', height: 56, borderRadius: 28,
         background: 'var(--surface-2)', color: cor,
@@ -225,7 +226,7 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
 
   // ── Default: start ───────────────────────────────────────────────────────────
   return (
-    <Link href={`/treino/${fichaId}`} style={{
+    <Link href={`/treino/?id=${fichaId}`} style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       width: '100%', height: 56, borderRadius: 28,
       background: cor, color: 'var(--accent-ink)',

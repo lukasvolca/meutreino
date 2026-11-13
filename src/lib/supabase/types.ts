@@ -286,6 +286,118 @@ export interface Database {
         }
         Relationships: []
       }
+      metas_nutricionais: {
+        Row: {
+          user_id: string
+          kcal: number
+          proteina: number
+          carbo: number
+          gordura: number
+          sexo: 'm' | 'f' | null
+          idade: number | null
+          altura_cm: number | null
+          peso_kg: number | null
+          atividade: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          kcal: number
+          proteina: number
+          carbo: number
+          gordura: number
+          sexo?: 'm' | 'f' | null
+          idade?: number | null
+          altura_cm?: number | null
+          peso_kg?: number | null
+          atividade?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['metas_nutricionais']['Insert']>
+        Relationships: []
+      }
+      alimentos_usuario: {
+        Row: {
+          id: string
+          user_id: string
+          nome: string
+          kcal: number
+          proteina: number
+          carbo: number
+          gordura: number
+          porcao_g: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          nome: string
+          kcal: number
+          proteina?: number
+          carbo?: number
+          gordura?: number
+          porcao_g?: number | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['alimentos_usuario']['Insert']>
+        Relationships: []
+      }
+      plano_refeicoes: {
+        Row: {
+          id: string
+          user_id: string
+          nome: string
+          horario: string | null
+          ordem: number
+          itens: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          nome: string
+          horario?: string | null
+          ordem?: number
+          itens?: Json
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['plano_refeicoes']['Insert']>
+        Relationships: []
+      }
+      diario_alimentar: {
+        Row: {
+          id: string
+          user_id: string
+          data: string
+          refeicao: string
+          plano_refeicao_id: string | null
+          alimento_ref: string | null
+          nome: string
+          gramas: number
+          kcal: number
+          proteina: number
+          carbo: number
+          gordura: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          data: string
+          refeicao: string
+          plano_refeicao_id?: string | null
+          alimento_ref?: string | null
+          nome: string
+          gramas: number
+          kcal: number
+          proteina?: number
+          carbo?: number
+          gordura?: number
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['diario_alimentar']['Insert']>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

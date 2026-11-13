@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/lib/supabase/types'
 import Link from 'next/link'
 import Icon from '@/components/icons'
+import { refreshData } from '@/lib/load'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
 type Ficha = Database['public']['Tables']['fichas']['Row'] & { exercicios: { count: number }[] }
@@ -58,7 +59,7 @@ export default function PerfilClient({ profile, fichas, treinosTotal }: {
     })
     setSavingFicha(false)
     setNovaFichaOpen(false)
-    router.refresh()
+    refreshData()
   }
 
   async function saveNome() {
@@ -66,12 +67,12 @@ export default function PerfilClient({ profile, fichas, treinosTotal }: {
     await supabase.from('profiles').update({ nome }).eq('id', profile.id)
     setSavingNome(false)
     setEditingNome(false)
-    router.refresh()
+    refreshData()
   }
 
   async function updateObjetivo(obj: string) {
     await supabase.from('profiles').update({ objetivo: obj }).eq('id', profile.id)
-    router.refresh()
+    refreshData()
   }
 
   async function logout() {
@@ -204,7 +205,7 @@ export default function PerfilClient({ profile, fichas, treinosTotal }: {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {fichas.map(f => (
-              <Link key={f.id} href={`/treino/${f.id}`}
+              <Link key={f.id} href={`/treino/?id=${f.id}`}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16,
                   background: 'var(--surface-1)', border: '1px solid var(--border)', textDecoration: 'none', color: 'inherit',

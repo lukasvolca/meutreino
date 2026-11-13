@@ -1,0 +1,9 @@
+# Tudo em /api passa pelo index.php; os outros arquivos PHP não são acessíveis direto.
+Options -Indexes
+RewriteEngine On
+RewriteCond %{REQUEST_URI} !/api/index\.php$
+RewriteRule ^ index.php [L,QSA]
+
+<FilesMatch "^(config|config\.example|lib|auth|query|schema)\.php$">
+  Require all denied
+</FilesMatch>

@@ -1,7 +1,13 @@
-import { redirect } from 'next/navigation'
-import { getAuthUser } from '@/lib/supabase/server'
+'use client'
 
-export default async function RootPage() {
-  const user = await getAuthUser()
-  redirect(user ? '/dashboard' : '/login')
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+export default function RootPage() {
+  const router = useRouter()
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => router.replace(data.user ? '/dashboard/' : '/login/'))
+  }, [router])
+  return null
 }

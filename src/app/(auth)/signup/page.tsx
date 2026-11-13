@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { refreshData } from '@/lib/load'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -27,7 +28,7 @@ export default function SignupPage() {
 
     if (error) { setError(error.message); setLoading(false); return }
     router.push('/onboarding')
-    router.refresh()
+    refreshData()
   }
 
   return (
