@@ -43,3 +43,9 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# supabase cli cache
+supabase/.temp/
+
+# claude code (local)
+.claude/

@@ -1,7 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Icon from '@/components/icons'
 import { BarChart } from '@/components/charts'
+import { todayBR, addDays, mondayOf } from '@/lib/date'
 import DashboardHeroButton from './DashboardHeroButton'
 
 const SVG_ICON_NAMES = new Set(['dumbbell','benchPress','bicep','squat','flame','bolt','target','trophy','timer','body','chart','history','calendar','apple','home','play','check','settings','bell','user','camera','youtube','search','swap','more','info'])
@@ -11,29 +12,14 @@ function renderFichaIcon(icone: string | null, size: number, color: string, stro
   return <span style={{ fontSize: size * 1.1, lineHeight: 1 }}>{icone}</span>
 }
 
-// Helper: get Monday-based week key (YYYY-MM-DD)
-function weekKey(dateStr: string) {
-  const d = new Date(dateStr + 'T12:00:00')
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(d)
-  mon.setDate(d.getDate() + diff)
-  return mon.toISOString().split('T')[0]
-}
-
-// Today in local date string (server uses UTC; shift by -3h for BRT)
-function todayStr() {
-  return new Date().toISOString().split('T')[0]
-}
+const weekKey = mondayOf
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
-  const hoje = todayStr()
-  const dataLimite = new Date()
-  dataLimite.setDate(dataLimite.getDate() - 90)
-  const dataLimiteStr = dataLimite.toISOString().split('T')[0]
+  const hoje = todayBR()
+  const dataLimiteStr = addDays(hoje, -90)
 
   const [{ data: profile }, { data: fichas }, { data: treinos }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user!.id).single(),
@@ -81,11 +67,7 @@ export default async function DashboardPage() {
   const last12: number[] = []
   const weekLabels: string[] = []
   for (let i = 11; i >= 0; i--) {
-    const d = new Date()
-    const day = d.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    d.setDate(d.getDate() + diff - i * 7)
-    const wk = d.toISOString().split('T')[0]
+    const wk = addDays(mondayOf(hoje), -i * 7)
     last12.push(weekVolumes[wk] ?? 0)
     weekLabels.push(`${12 - i}s`)
   }
@@ -96,29 +78,24 @@ export default async function DashboardPage() {
   const totalVolume12sPrev = allWeeks.slice(0, 12).reduce((s, wk) => s + (weekVolumes[wk] ?? 0), 0)
 
   // This week stats
-  const startOfWeek = (() => {
-    const d = new Date()
-    const day = d.getDay()
-    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
-    return d.toISOString().split('T')[0]
-  })()
+  const startOfWeek = mondayOf(hoje)
 
   const DIAS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'] // Mon-Sun
   const treinosEstaSemana = treinoList.filter(t => t.data >= startOfWeek)
   const diasTreinados = new Set(treinosEstaSemana.map(t => {
-    const d = new Date(t.data + 'T12:00:00')
-    return (d.getDay() + 6) % 7 // 0=Mon
+    const d = new Date(t.data + 'T12:00:00Z')
+    return (d.getUTCDay() + 6) % 7 // 0=Mon
   }))
 
   const treinosSemana = treinosEstaSemana.length
-  const todayDow = (new Date().getDay() + 6) % 7 // 0=Mon
+  const todayDow = (new Date(hoje + 'T12:00:00Z').getUTCDay() + 6) % 7 // 0=Mon
 
   const firstName = profile?.nome?.split(' ')[0] ?? 'você'
   const streak = profile?.streak ?? 0
 
   // Date label like "QUI · 21 MAI"
   const dateLabel = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'short', day: '2-digit', month: 'short'
+    weekday: 'short', day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo',
   }).toUpperCase().replace(/\./g, '').replace(/(\w+)\s(\d+)\s(\w+)/, '$1 · $2 $3')
 
   return (

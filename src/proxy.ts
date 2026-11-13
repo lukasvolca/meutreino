@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const ONB_COOKIE = 'mt_onb'
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -21,7 +23,10 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims() valida o JWT localmente (e renova a sessão se precisar),
+  // sem ir ao servidor de auth em toda navegação.
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null
 
   const isAuth = !!user
   const path = request.nextUrl.pathname
@@ -69,7 +74,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  if (isAuth && !isAuthPage && !isOnboarding) {
+  // Onboarding concluído fica marcado num cookie (amarrado ao id do usuário),
+  // então o perfil só é consultado até a primeira confirmação.
+  if (isAuth && !isAuthPage && !isOnboarding && request.cookies.get(ONB_COOKIE)?.value !== user.id) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('objetivo, role')
@@ -81,11 +88,18 @@ export async function proxy(request: NextRequest) {
     if (!profile?.objetivo && role === 'user') {
       return NextResponse.redirect(new URL('/onboarding', request.url))
     }
+    if (profile) {
+      supabaseResponse.cookies.set(ONB_COOKIE, user.id, {
+        httpOnly: true, sameSite: 'lax', secure: true, path: '/', maxAge: 60 * 60 * 24 * 365,
+      })
+    }
   }
 
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // sw.js e manifest.json precisam ser servidos sem login (senão o service
+  // worker é redirecionado e o navegador recusa o registro).
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)'],
 }

@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
 import CorpoClient from './CorpoClient'
 import NovasMedidasButton from './NovasMedidasButton'
 
 export default async function CorpoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
   const { data: medidas } = await supabase
     .from('medidas')

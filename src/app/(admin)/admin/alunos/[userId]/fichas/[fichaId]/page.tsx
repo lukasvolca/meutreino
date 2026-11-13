@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import FichaAdmin from './FichaAdmin'
 
 export default async function FichaAdminPage({ params }: { params: Promise<{ userId: string; fichaId: string }> }) {
   const { userId, fichaId } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) redirect('/admin/login')
 
   const { data: myProfile } = await supabase

@@ -3,22 +3,21 @@ import { Space_Grotesk, JetBrains_Mono, Bricolage_Grotesque } from 'next/font/go
 import SwRegister from '@/components/SwRegister'
 import './globals.css'
 
+// As três famílias são fontes variáveis: sem `weight`, cada uma vira um
+// único arquivo com todos os pesos (antes eram 16 arquivos).
 const spaceGrotesk = Space_Grotesk({
   variable: '--font-body',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
 })
 
 const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
 })
 
 const bricolageGrotesque = Bricolage_Grotesque({
   variable: '--font-display',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
 })
 
 export const metadata: Metadata = {

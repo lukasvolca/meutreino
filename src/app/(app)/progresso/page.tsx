@@ -1,24 +1,16 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
 import ProgressoClient, { type ExercicioProgresso } from './ProgressoClient'
+import { todayBR, addDays, mondayOf, isoDateBR } from '@/lib/date'
 
-function weekKey(dateStr: string) {
-  const d = new Date(dateStr + 'T12:00:00')
-  const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const mon = new Date(d)
-  mon.setDate(d.getDate() + diff)
-  return mon.toISOString().split('T')[0]
-}
+const weekKey = mondayOf
 
 export default async function ProgressoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
-  const oneYearAgo = new Date()
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-  const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0]
-
-  const hoje = new Date().toISOString().split('T')[0]
+  const hoje = todayBR()
+  const oneYearAgoStr = addDays(hoje, -365)
+  const oneYearAgo = new Date(oneYearAgoStr + 'T03:00:00Z')
   const mesAtualStr = hoje.slice(0, 7)
 
   const [{ data: fichas }, { data: treinos }] = await Promise.all([
@@ -55,7 +47,7 @@ export default async function ProgressoPage() {
   const weeklyMap: Record<string, Record<string, number[]>> = {}
   for (const row of setsLog ?? []) {
     if (!row.exercicio_id || !row.carga) continue
-    const week = weekKey(row.created_at.split('T')[0])
+    const week = weekKey(isoDateBR(new Date(row.created_at)))
     if (!weeklyMap[row.exercicio_id]) weeklyMap[row.exercicio_id] = {}
     if (!weeklyMap[row.exercicio_id][week]) weeklyMap[row.exercicio_id][week] = []
     weeklyMap[row.exercicio_id][week].push(row.carga)
@@ -91,9 +83,7 @@ export default async function ProgressoPage() {
   // Build last 12 weeks including current (even if 0)
   const weeklyVolume: { week: string; vol: number }[] = []
   for (let i = 11; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i * 7)
-    const wk = weekKey(d.toISOString().split('T')[0])
+    const wk = addDays(mondayOf(hoje), -i * 7)
     weeklyVolume.push({ week: wk, vol: volMap[wk] ?? 0 })
   }
   // Deduplicate (same week may appear multiple times due to iteration)

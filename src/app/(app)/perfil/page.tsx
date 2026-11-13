@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
 import PerfilClient from './PerfilClient'
 
 export default async function PerfilPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
   const [{ data: profile }, { data: fichas }, { data: treinos }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user!.id).single(),

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Icon from '@/components/icons'
 import { createClient } from '@/lib/supabase/client'
 import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
+import { todayBR } from '@/lib/date'
 import type { ActiveSession } from '@/lib/activeSession'
 
 interface Props {
@@ -67,20 +68,38 @@ export default function DashboardHeroButton({ fichaId, fichaLetra, cor, isComple
 
   async function handleEnd() {
     if (!session) return
+
+    // Se já há séries marcadas, finaliza pela tela do treino, que salva
+    // cargas e repetições. Encerrar daqui gravaria só a duração.
+    try {
+      const saved = localStorage.getItem(`meutreino_sets_${fichaId}`)
+      const sets = saved ? Object.values(JSON.parse(saved) as Record<string, { done?: boolean }[]>).flat() : []
+      if (sets.some(s => s?.done)) {
+        router.push(`/treino/${fichaId}`)
+        return
+      }
+    } catch {}
+
     setSaving(true)
     const durMin = Math.max(1, Math.round(elapsed / 60))
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('treinos').insert({
-        user_id: user.id,
-        ficha_id: fichaId,
-        ficha_letra: fichaLetra,
-        data: new Date().toISOString().split('T')[0],
-        duracao_min: durMin,
-        volume_total: 0,
-      })
+    const { error } = user
+      ? await supabase.from('treinos').insert({
+          user_id: user.id,
+          ficha_id: fichaId,
+          ficha_letra: fichaLetra,
+          data: todayBR(),
+          duracao_min: durMin,
+          volume_total: 0,
+        })
+      : { error: new Error('sem sessão') }
+    if (error) {
+      setSaving(false)
+      alert('Não deu para salvar (sem conexão?). Tente de novo.')
+      return
     }
     clearActiveSession()
+    localStorage.removeItem(`meutreino_sets_${fichaId}`)
     setSession(null)
     setSaving(false)
     router.refresh()

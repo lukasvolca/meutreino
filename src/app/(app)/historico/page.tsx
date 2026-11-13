@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getAuthUser } from '@/lib/supabase/server'
+import { todayBR } from '@/lib/date'
 import { Heatmap } from '@/components/charts'
 import Icon from '@/components/icons'
 
@@ -14,7 +15,7 @@ type TreinoRow = {
 
 export default async function HistoricoPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
 
   const { data: treinosRaw } = await supabase
     .from('treinos')
@@ -25,7 +26,7 @@ export default async function HistoricoPage() {
 
   const treinos = (treinosRaw as TreinoRow[] | null) ?? []
 
-  const hoje = new Date()
+  const hoje = new Date(todayBR() + 'T12:00:00')
   // Filter to last 84 days (12 weeks) for stats + heatmap
   const treinos84 = treinos.filter(t => {
     const d = new Date(t.data + 'T12:00:00')

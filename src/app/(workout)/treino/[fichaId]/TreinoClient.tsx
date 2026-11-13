@@ -7,6 +7,7 @@ import Icon from '@/components/icons'
 import { Sparkline, LineChart } from '@/components/charts'
 import type { Database } from '@/lib/supabase/types'
 import { getActiveSession, setActiveSession, clearActiveSession } from '@/lib/activeSession'
+import { todayBR } from '@/lib/date'
 
 type Ficha = Database['public']['Tables']['fichas']['Row']
 type Exercicio = Database['public']['Tables']['exercicios']['Row']
@@ -966,6 +967,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   const [showNewEx, setShowNewEx] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const [confirmDeleteEx, setConfirmDeleteEx] = useState<Exercicio | null>(null)
   const [deletingExId, setDeletingExId] = useState<string | null>(null)
   const [duplicatingExId, setDuplicatingExId] = useState<string | null>(null)
@@ -1200,9 +1202,9 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
 
   // ── Finalize ──────────────────────────────────────────────────────────────────
   async function finalizarTreino() {
-    clearActiveSession()
-    localStorage.removeItem(`meutreino_sets_${ficha.id}`)
+    if (finishing) return
     setFinishing(true)
+    setSaveError(false)
     const durMin = Math.max(1, Math.round(elapsedSec / 60))
     let volume = 0
     for (const ex of exList) {
@@ -1210,28 +1212,47 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         if (s.done && (ex.tipo ?? 'forca') === 'forca') volume += s.carga * s.reps
       }
     }
-    const { data: treino } = await supabase.from('treinos').insert({
-      user_id: userId, ficha_id: ficha.id, ficha_letra: ficha.letra,
-      data: new Date().toISOString().split('T')[0],
-      duracao_min: durMin, volume_total: Math.round(volume),
-    }).select().single()
 
-    if (treino) {
+    // O rascunho local (séries + sessão) só é apagado depois que o banco
+    // confirmar o salvamento. Se a internet cair, nada se perde.
+    try {
+      const { data: treino, error } = await supabase.from('treinos').insert({
+        user_id: userId, ficha_id: ficha.id, ficha_letra: ficha.letra,
+        data: todayBR(),
+        duracao_min: durMin, volume_total: Math.round(volume),
+      }).select().single()
+      if (error || !treino) throw error ?? new Error('treino não salvo')
+
       const logs = exList.flatMap(ex => (setsByEx[ex.id] ?? []).map((s, i) => ({
         treino_id: treino.id, exercicio_id: ex.id, exercicio_nome: ex.nome,
         serie_num: i + 1, carga: s.carga, reps: (ex.tipo ?? 'forca') === 'forca' ? s.reps : null,
         duracao_seg: ex.tipo === 'iso' ? s.duracaoSeg : null, done: s.done,
       })))
-      if (logs.length > 0) await supabase.from('sets_log').insert(logs)
-
-      for (const ex of exList) {
-        const doneS = (setsByEx[ex.id] ?? []).filter(s => s.done)
-        if (doneS.length > 0 && (ex.tipo ?? 'forca') === 'forca') {
-          const avg = doneS.reduce((a, s) => a + s.carga, 0) / doneS.length
-          await supabase.from('exercicios').update({ carga: avg }).eq('id', ex.id)
+      if (logs.length > 0) {
+        const { error: logErr } = await supabase.from('sets_log').insert(logs)
+        if (logErr) {
+          // Não deixa um treino "vazio" no histórico: desfaz e tenta de novo depois.
+          await supabase.from('treinos').delete().eq('id', treino.id)
+          throw logErr
         }
       }
+    } catch {
+      setFinishing(false)
+      setSaveError(true)
+      return
     }
+
+    clearActiveSession()
+    localStorage.removeItem(`meutreino_sets_${ficha.id}`)
+
+    // Atualiza a carga de referência de cada exercício (não bloqueia o salvamento).
+    await Promise.allSettled(exList.flatMap(ex => {
+      const doneS = (setsByEx[ex.id] ?? []).filter(s => s.done)
+      if (doneS.length === 0 || (ex.tipo ?? 'forca') !== 'forca') return []
+      const avg = doneS.reduce((a, s) => a + s.carga, 0) / doneS.length
+      return [supabase.from('exercicios').update({ carga: avg }).eq('id', ex.id)]
+    }))
+
     router.push('/dashboard')
     router.refresh()
   }
@@ -1442,6 +1463,15 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
         )}
         {doneSets > 0 && (
           <div style={{ padding: `${restDuration > 0 ? 88 : 10}px 16px 16px`, background: 'linear-gradient(to top, var(--bg-app) 60%, transparent)', transition: 'padding 300ms' }}>
+            {saveError && !finishing && (
+              <div role="alert" style={{
+                marginBottom: 10, padding: '10px 14px', borderRadius: 14,
+                background: 'rgba(255,79,94,0.12)', border: '1px solid rgba(255,79,94,0.35)',
+                color: 'var(--danger)', fontSize: 13, lineHeight: 1.4,
+              }}>
+                Não deu para salvar (sem conexão?). Suas séries continuam guardadas neste celular. Toque para tentar de novo.
+              </div>
+            )}
             <button onClick={finalizarTreino} disabled={finishing} style={{
               width: '100%', height: 56, borderRadius: 28,
               background: accent, color: 'var(--accent-ink)',
@@ -1449,7 +1479,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
               border: 'none', cursor: finishing ? 'wait' : 'pointer',
               opacity: finishing ? 0.7 : 1,
             }}>
-              {finishing ? 'Salvando…' : `Finalizar treino · ${Math.max(1, Math.round(elapsedSec / 60))}min`}
+              {finishing ? 'Salvando…' : saveError ? 'Tentar salvar de novo' : `Finalizar treino · ${Math.max(1, Math.round(elapsedSec / 60))}min`}
             </button>
           </div>
         )}
