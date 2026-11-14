@@ -19,7 +19,9 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 // Proteção contra CSRF: escrita só com o cabeçalho X-MT (o navegador não deixa
 // outro site enviar cabeçalho próprio sem CORS, e esta API não libera CORS).
-if ($method !== 'GET' && ($_SERVER['HTTP_X_MT'] ?? '') !== '1') fail('Requisição inválida', 400, 'bad_request');
+// Exceção: o retorno do Google chega por formulário comum e é protegido pelo state
+// de uso único amarrado ao cookie do navegador (google.php).
+if ($method !== 'GET' && $path !== '/auth/google/callback' && ($_SERVER['HTTP_X_MT'] ?? '') !== '1') fail('Requisição inválida', 400, 'bad_request');
 
 if ($path === '/health') respond(['ok' => true, 'php' => PHP_VERSION, 'db' => (bool)db()]);
 if ($path === '/auth/me' && $method === 'GET') auth_me();
@@ -28,6 +30,7 @@ if ($path === '/auth/signup' && $method === 'POST') auth_signup(body());
 if ($path === '/auth/logout' && $method === 'POST') auth_logout();
 if ($path === '/q' && $method === 'POST') q_handle(body());
 if ($path === '/auth/google/start' && $method === 'GET') google_start();
-if ($path === '/auth/google/callback' && $method === 'GET') google_callback();
+if ($path === '/auth/google/callback' && $method === 'GET') google_callback_page();
+if ($path === '/auth/google/callback' && $method === 'POST') google_callback();
 
 fail('Rota não encontrada', 404, 'not_found');

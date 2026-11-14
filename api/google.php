@@ -38,7 +38,12 @@ function google_start(): void {
   $q = http_build_query([
     'client_id' => $cfg['client_id'],
     'redirect_uri' => $cfg['redirect_uri'],
-    'response_type' => 'code',
+    // "code id_token" faz o Google devolver os dados no fragmento (#), que o navegador não
+    // envia ao servidor: o ModSecurity da HostGator bloqueia o retorno em query string
+    // (scope/iss trazem URLs). A página de retorno lê o fragmento e envia por POST.
+    // Só usamos o código; o id_token confiável vem da troca direta com o Google.
+    'response_type' => 'code id_token',
+    'response_mode' => 'fragment',
     'scope' => 'openid email profile',
     'state' => $state,
     'nonce' => $nonce,
@@ -74,14 +79,44 @@ function jwt_claims(string $jwt): ?array {
   return is_array($c) ? $c : null;
 }
 
+/** GET do retorno: página mínima que lê o fragmento (#) e reenvia por POST para cá. */
+function google_callback_page(): void {
+  header('Content-Type: text/html; charset=utf-8');
+  header('Cache-Control: no-store');
+  header("Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
+  echo <<<'HTML'
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Entrando… · MeuTreino</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0d0e12;color:#fff;font-family:system-ui,sans-serif}p{color:rgba(255,255,255,.62)}a{color:#CCFF00}</style>
+</head><body><main style="text-align:center;padding:24px"><h1 style="font-size:22px">Entrando com Google…</h1><p id="msg" role="status">Só um instante.</p>
+<form id="f" method="post" action="/api/auth/google/callback" hidden>
+<input type="hidden" name="state"><input type="hidden" name="code"><input type="hidden" name="error"></form>
+<script>
+(function () {
+  var p = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, '', '/api/auth/google/callback');
+  var state = p.get('state') || '', code = p.get('code') || '', error = p.get('error') || '';
+  if (!/^[a-f0-9]{64}$/.test(state) || code.length > 4096 || error.length > 256 || (!code && !error)) {
+    document.getElementById('msg').innerHTML = 'Retorno inválido ou antigo. <a href="/login/">Voltar e tentar de novo</a>.';
+    return;
+  }
+  var f = document.getElementById('f');
+  f.elements.state.value = state; f.elements.code.value = code; f.elements.error.value = error;
+  f.submit();
+})();
+</script></main></body></html>
+HTML;
+  exit;
+}
+
 function google_callback(): void {
   $cfg = google_cfg();
   if (!$cfg) back_to_app('/login/?erro=google_off');
 
-  $state = (string)($_GET['state'] ?? '');
+  $state = (string)($_POST['state'] ?? '');
   $cookie = (string)($_COOKIE[OAUTH_COOKIE] ?? '');
   setcookie(OAUTH_COOKIE, '', ['expires' => time() - 3600, 'path' => '/api/auth/google/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
-  if (!empty($_GET['error'])) back_to_app('/login/?erro=google_cancelado');
+  if (!empty($_POST['error'])) back_to_app('/login/?erro=google_cancelado');
   if (!preg_match('/^[a-f0-9]{64}$/', $state) || !hash_equals($cookie, $state)) back_to_app('/login/?erro=google_expirado');
 
   $pdo = db();
@@ -91,7 +126,7 @@ function google_callback(): void {
   $pdo->prepare('DELETE FROM oauth_flows WHERE state = ?')->execute([$state]);   // uso único
   if (!$flow || strtotime($flow['created_at'] . ' UTC') < time() - 600) back_to_app('/login/?erro=google_expirado');
 
-  $code = (string)($_GET['code'] ?? '');
+  $code = (string)($_POST['code'] ?? '');
   if ($code === '' || strlen($code) > 4096) back_to_app('/login/?erro=google');
 
   // Troca o código pelo id_token direto com o Google (TLS verificado), com o verificador PKCE
