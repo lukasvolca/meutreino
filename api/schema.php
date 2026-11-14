@@ -106,7 +106,7 @@ const TABLES = [
 ];
 
 // DDL do MySQL. Executado de forma idempotente na primeira requisição de cada versão.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function schema_sql(): array {
   $e = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
@@ -290,5 +290,22 @@ function schema_sql(): array {
       FOREIGN KEY (plano_refeicao_id) REFERENCES plano_refeicoes(id) ON DELETE SET NULL
     ) $e",
     "CREATE TABLE IF NOT EXISTS meta (k VARCHAR(40) PRIMARY KEY, v VARCHAR(255) NOT NULL) $e",
+    // v2 — login com Google
+    "CREATE TABLE IF NOT EXISTS user_identities (
+      provider VARCHAR(20) NOT NULL,
+      sub VARCHAR(255) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      email VARCHAR(255) NULL,
+      created_at $now,
+      PRIMARY KEY (provider, sub),
+      INDEX (user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) $e",
+    "CREATE TABLE IF NOT EXISTS oauth_flows (
+      state CHAR(64) PRIMARY KEY,
+      nonce CHAR(64) NOT NULL,
+      verifier VARCHAR(128) NOT NULL,
+      created_at $now
+    ) $e",
   ];
 }

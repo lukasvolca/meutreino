@@ -54,3 +54,4 @@ supabase/.temp/
 api/config.php
 scripts/.deploy.local.json
 /out/
+api/google-oauth.json

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import GoogleButton from '@/components/GoogleButton'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { refreshData } from '@/lib/load'
@@ -39,6 +40,8 @@ export default function SignupPage() {
         </div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>Crie sua conta gratuita</p>
       </div>
+
+      <GoogleButton/>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {[

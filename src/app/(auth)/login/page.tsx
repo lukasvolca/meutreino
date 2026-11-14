@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import GoogleButton from '@/components/GoogleButton'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -31,6 +32,8 @@ export default function LoginPage() {
         </div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>Seu treino. Seu ritmo.</p>
       </div>
+
+      <GoogleButton/>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
