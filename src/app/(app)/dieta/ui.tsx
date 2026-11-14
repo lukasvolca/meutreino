@@ -110,7 +110,7 @@ export function Stepper({ value, onChange, step, min = 0, suffix }: {
         <Icon name="minus" size={22} strokeWidth={2.4}/>
       </button>
       <div style={{ flex: 1, position: 'relative' }}>
-        <input inputMode="decimal" value={draft ?? (Number.isFinite(value) ? String(value).replace('.', ',') : '')}
+        <input data-grande="" inputMode="decimal" value={draft ?? (Number.isFinite(value) ? String(value).replace('.', ',') : '')}
           onChange={e => {
             setDraft(e.target.value)
             const v = parseFloat(e.target.value.replace(',', '.'))

@@ -57,12 +57,12 @@ function InlineNumber({ value, onChange, suffix, width = 56, color, fontSize = 1
 
   if (editing) {
     return (
-      <input ref={inputRef} type="text" inputMode="decimal" value={draft}
+      <input ref={inputRef} type="text" inputMode="decimal" value={draft} data-grande={fontSize >= 16 ? '' : undefined}
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
         style={{
-          width, height: 30, padding: '0 6px',
+          width, height: fontSize > 18 ? 40 : 34, padding: '0 6px',
           background: 'var(--surface-3)', border: `1px solid ${color || 'var(--accent)'}`,
           borderRadius: 8, color: 'var(--text)',
           fontFamily: 'var(--font-mono)', fontSize, fontWeight: 600,
@@ -74,7 +74,7 @@ function InlineNumber({ value, onChange, suffix, width = 56, color, fontSize = 1
   return (
     <span onClick={() => setEditing(true)} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2,
-      minWidth: width, height: 30, padding: '0 6px',
+      minWidth: width, height: fontSize > 18 ? 40 : 34, padding: '0 6px',
       background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.1)',
       borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize, fontWeight: 600,
       color: color || 'var(--text)', cursor: 'pointer', fontVariantNumeric: 'tabular-nums',
@@ -85,32 +85,84 @@ function InlineNumber({ value, onChange, suffix, width = 56, color, fontSize = 1
 }
 
 // ── SetRow ─────────────────────────────────────────────────────────────────────
-function SetRow({ idx, set, tipo, accent, isBiset, onToggle, onUpdate }: {
+// Botão grande de −/+ (bom de acertar com a mão suada).
+function StepBtn({ onClick, label, children }: { onClick: () => void, label: string, children: React.ReactNode }) {
+  return (
+    <button type="button" aria-label={label} onClick={e => { e.stopPropagation(); onClick(); navigator.vibrate?.(8) }} style={{
+      width: 44, height: 44, borderRadius: 14, flexShrink: 0, cursor: 'pointer',
+      background: 'var(--surface-3)', border: '1px solid var(--border-strong)', color: 'var(--text)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>{children}</button>
+  )
+}
+
+function Stepper({ value, step, min = 0, unit, onChange }: {
+  value: number, step: number, min?: number, unit: string, onChange: (v: number) => void
+}) {
+  const r = (v: number) => Math.round(v * 100) / 100
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+      <StepBtn label={`Menos ${step} ${unit}`} onClick={() => onChange(Math.max(min, r(value - step)))}><Icon name="minus" size={20} strokeWidth={2.4}/></StepBtn>
+      <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+        <InlineNumber value={value} onChange={v => onChange(Math.max(min, v))} width={58} fontSize={22}/>
+        <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 2 }}>{unit}</div>
+      </div>
+      <StepBtn label={`Mais ${step} ${unit}`} onClick={() => onChange(r(value + step))}><Icon name="plus" size={20} strokeWidth={2.4}/></StepBtn>
+    </div>
+  )
+}
+
+function SetRow({ idx, set, tipo, accent, isBiset, ativo, ultima, onToggle, onUpdate }: {
   idx: number, set: SetState, tipo: string, accent: string, isBiset: boolean,
+  ativo: boolean, ultima?: { carga: number, reps: number | null },
   onToggle: () => void, onUpdate: (patch: Partial<SetState>) => void,
 }) {
   const done = set.done
+
+  // Série da vez (força, sem biset): controles grandes + botão de concluir
+  if (ativo && !done && tipo === 'forca' && !isBiset) {
+    return (
+      <div style={{ margin: '6px 0 8px', padding: 12, borderRadius: 16, background: 'var(--surface-2)', border: `1px solid ${accent}55` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10, gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Série {idx + 1}</span>
+          {ultima && <span style={{ fontSize: 12, color: 'var(--muted)' }}>última vez: <b style={{ color: 'var(--text)' }}>{ultima.carga} kg × {ultima.reps ?? '–'}</b></span>}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Stepper value={set.reps} step={1} min={0} unit="reps" onChange={v => onUpdate({ reps: Math.round(v) })}/>
+          <Stepper value={set.carga} step={2.5} min={0} unit="kg" onChange={v => onUpdate({ carga: v })}/>
+        </div>
+        <button type="button" onClick={onToggle} style={{
+          width: '100%', height: 48, marginTop: 12, borderRadius: 14, border: 0, cursor: 'pointer',
+          background: accent, color: 'var(--accent-ink)', fontWeight: 700, fontSize: 15,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <Icon name="check" size={18} strokeWidth={2.8} color="currentColor"/> Concluir série
+        </button>
+      </div>
+    )
+  }
+
   const checkBtn = (
-    <button onClick={onToggle} style={{
-      width: 30, height: 30, borderRadius: 8,
+    <button onClick={onToggle} aria-label={done ? `Desmarcar série ${idx + 1}` : `Concluir série ${idx + 1}`} style={{
+      width: 40, height: 40, borderRadius: 12,
       background: done ? accent : 'rgba(255,255,255,0.05)',
       border: done ? 'none' : '1px solid var(--border-strong)',
       color: done ? 'var(--accent-ink)' : 'var(--muted-2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       boxShadow: done ? `0 0 12px ${accent}40` : 'none', cursor: 'pointer',
     }}>
-      <Icon name="check" size={16} strokeWidth={2.6} color="currentColor"/>
+      <Icon name="check" size={18} strokeWidth={2.6} color="currentColor"/>
     </button>
   )
-  const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted-2)', letterSpacing: '0.06em', fontWeight: 600 }
-  const unitStyle: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)' }
-  const base: React.CSSProperties = { display: 'grid', alignItems: 'center', padding: '8px 0', gap: 8, opacity: done ? 0.55 : 1, transition: 'opacity 180ms' }
+  const labelStyle: React.CSSProperties = { fontSize: 13, color: 'var(--muted)', fontWeight: 600 }
+  const unitStyle: React.CSSProperties = { fontSize: 12, color: 'var(--muted-2)' }
+  const base: React.CSSProperties = { display: 'grid', alignItems: 'center', padding: '6px 0', gap: 8, opacity: done ? 0.6 : 1, transition: 'opacity 180ms' }
 
   if (tipo === 'iso') return (
-    <div style={{ ...base, gridTemplateColumns: '28px 1fr 36px' }}>
+    <div style={{ ...base, gridTemplateColumns: '30px 1fr 40px' }}>
       <div style={labelStyle}>S{idx + 1}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <InlineNumber value={set.duracaoSeg} onChange={v => onUpdate({ duracaoSeg: v })} width={56} fontSize={14}/>
+        <InlineNumber value={set.duracaoSeg} onChange={v => onUpdate({ duracaoSeg: v })} width={60} fontSize={17}/>
         <span style={unitStyle}>seg</span>
       </div>
       {checkBtn}
@@ -118,10 +170,10 @@ function SetRow({ idx, set, tipo, accent, isBiset, onToggle, onUpdate }: {
   )
 
   if (tipo === 'cardio') return (
-    <div style={{ ...base, gridTemplateColumns: '28px 1fr 36px' }}>
-      <div style={labelStyle}><Icon name="timer" size={13} color="var(--muted-2)"/></div>
+    <div style={{ ...base, gridTemplateColumns: '30px 1fr 40px' }}>
+      <div style={labelStyle}><Icon name="timer" size={15} color="var(--muted)"/></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <InlineNumber value={set.duracaoMin} onChange={v => onUpdate({ duracaoMin: v })} width={56} fontSize={14}/>
+        <InlineNumber value={set.duracaoMin} onChange={v => onUpdate({ duracaoMin: v })} width={60} fontSize={17}/>
         <span style={unitStyle}>min</span>
       </div>
       {checkBtn}
@@ -129,35 +181,33 @@ function SetRow({ idx, set, tipo, accent, isBiset, onToggle, onUpdate }: {
   )
 
   if (isBiset) return (
-    <div style={{ ...base, gridTemplateColumns: '28px 1fr auto auto 36px' }}>
+    <div style={{ ...base, gridTemplateColumns: '30px 1fr auto auto 40px' }}>
       <div style={labelStyle}>S{idx + 1}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={42} fontSize={14}/>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={42} fontSize={16}/>
         <span style={unitStyle}>reps</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ ...unitStyle, fontSize: 9, letterSpacing: '0.1em' }}>A</span>
-        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={46} fontSize={14}/>
-        <span style={unitStyle}>kg</span>
+        <span style={{ ...unitStyle, fontWeight: 700 }}>A</span>
+        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={48} fontSize={16}/>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ ...unitStyle, fontSize: 9, letterSpacing: '0.1em' }}>B</span>
-        <InlineNumber value={set.carga_b} onChange={v => onUpdate({ carga_b: v })} width={46} fontSize={14}/>
-        <span style={unitStyle}>kg</span>
+        <span style={{ ...unitStyle, fontWeight: 700 }}>B</span>
+        <InlineNumber value={set.carga_b} onChange={v => onUpdate({ carga_b: v })} width={48} fontSize={16}/>
       </div>
       {checkBtn}
     </div>
   )
 
   return (
-    <div style={{ ...base, gridTemplateColumns: '28px 1fr 1fr 36px' }}>
+    <div style={{ ...base, gridTemplateColumns: '30px 1fr 1fr 40px' }}>
       <div style={labelStyle}>S{idx + 1}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={42} fontSize={14}/>
+        <InlineNumber value={set.reps} onChange={v => onUpdate({ reps: Math.round(v) })} width={44} fontSize={17}/>
         <span style={unitStyle}>reps</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={50} fontSize={14}/>
+        <InlineNumber value={set.carga} onChange={v => onUpdate({ carga: v })} width={54} fontSize={17}/>
         <span style={unitStyle}>kg</span>
       </div>
       {checkBtn}
@@ -173,13 +223,14 @@ const cardActionBtn: React.CSSProperties = {
 }
 
 // ── ExerciseCard ───────────────────────────────────────────────────────────────
-function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
+function ExerciseCard({ ex, idx, sets, expanded, accent, historico, ultima, recorde,
   isDragging, translateY, shiftY,
   onDragHandleDown, cardRef,
   onToggleExpanded, onUpdateSet, onAddSet, onRemoveSet, onPlayVideo, onEdit, onDuplicate, onDelete, isDuplicating, onNote, onStartRest, onOpenChart,
 }: {
   ex: Exercicio, idx: number, sets: SetState[], expanded: boolean, accent: string,
   historico: number[],
+  ultima: { carga: number, reps: number | null }[], recorde: number,
   isDragging: boolean, translateY: number, shiftY: number,
   onDragHandleDown: (e: React.PointerEvent) => void,
   cardRef: (el: HTMLDivElement | null) => void,
@@ -211,6 +262,7 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
   }
 
   const completedSets = sets.filter(s => s.done).length
+  const ativoIdx = sets.findIndex(s => !s.done)
   const allDone = completedSets === sets.length && sets.length > 0
   const tipo = ex.tipo ?? 'forca'
   const isCardio = tipo === 'cardio'
@@ -297,11 +349,17 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
           {allDone ? <Icon name="check" size={15} strokeWidth={2.8} color="currentColor"/> : String(idx + 1).padStart(2, '0')}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2, ...(!expanded && { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }) }}>{ex.nome}</div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 3, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em', lineHeight: 1.2, ...(!expanded && { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }) }}>{ex.nome}</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 3, alignItems: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
             {ex.grupo && <><span style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>{ex.grupo}</span><span style={{ color: 'var(--muted-3)' }}>·</span></>}
             {metaSummary}
           </div>
+          {!isCardio && !isIso && (ultima.length > 0 || recorde > 0) && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
+              {ultima.length > 0 && <span>Última: <b style={{ color: 'var(--text)' }}>{Math.max(...ultima.map(u => u.carga))} kg × {ultima[0].reps ?? '–'}</b></span>}
+              {recorde > 0 && <span style={{ color: '#ffb547' }}>🏆 {recorde} kg</span>}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
           {/* Top area: action buttons on long press, sparkline otherwise */}
@@ -388,17 +446,18 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
               borderTop: '1px solid var(--border)', paddingTop: 8, paddingBottom: 6,
             }}>
               {isCardio ? (
-                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>—</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>DURAÇÃO</div><div/></>
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>—</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>DURAÇÃO</div><div/></>
               ) : isIso ? (
-                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>TEMPO</div><div/></>
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>TEMPO</div><div/></>
               ) : ex.is_biset ? (
-                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA A</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA B</div><div/></>
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>CARGA A</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>CARGA B</div><div/></>
               ) : (
-                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted-2)', letterSpacing: '0.1em' }}>CARGA</div><div/></>
+                <><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>SET</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>REPS</div><div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>CARGA</div><div/></>
               )}
             </div>
             {sets.map((s, i) => (
               <SetRow key={i} idx={i} set={s} tipo={tipo} accent={accent} isBiset={!!ex.is_biset}
+                ativo={i === ativoIdx} ultima={ultima[i] ?? ultima[ultima.length - 1]}
                 onToggle={() => {
                   onUpdateSet(i, { done: !s.done })
                   if (!s.done && !isCardio) onStartRest(ex.descanso ?? 60)
@@ -445,68 +504,111 @@ function ExerciseCard({ ex, idx, sets, expanded, accent, historico,
 }
 
 // ── RestTimer ──────────────────────────────────────────────────────────────────
+// Conta pelo relógio (hora de término), então não "para" se a tela apagar ou o
+// navegador pausar o app; ao voltar, já mostra o tempo certo. No fim vibra e bipa.
+let audioCtx: AudioContext | null = null
+
+/** Chamar dentro de um toque do usuário: o navegador só libera som assim. */
+function liberarSom() {
+  try {
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AC) return
+    audioCtx ??= new AC()
+    void audioCtx.resume()
+  } catch {}
+}
+
+function bipar() {
+  try {
+    if (!audioCtx) return
+    const t0 = audioCtx.currentTime
+    for (let i = 0; i < 3; i++) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain()
+      o.frequency.value = 880
+      g.gain.setValueAtTime(0.0001, t0 + i * 0.25)
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + i * 0.25 + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.25 + 0.18)
+      o.connect(g).connect(audioCtx.destination)
+      o.start(t0 + i * 0.25); o.stop(t0 + i * 0.25 + 0.2)
+    }
+  } catch {}
+}
+
 function RestTimer({ duration, accent, onDone, onCancel }: {
   duration: number, accent: string, onDone: () => void, onCancel: () => void
 }) {
-  const [remaining, setRemaining] = useState(duration)
-  const durationRef = useRef(duration)
+  const [fimEm, setFimEm] = useState(() => Date.now() + duration * 1000)
+  const [total, setTotal] = useState(duration)
+  const [agora, setAgora] = useState(() => Date.now())
+  const avisou = useRef(false)
 
   useEffect(() => {
-    durationRef.current = duration
-    setRemaining(duration)
-    const id = setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) { clearInterval(id); onDone(); return 0 }
-        return r - 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
-  }, [duration]) // eslint-disable-line
+    const id = setInterval(() => setAgora(Date.now()), 250)
+    const voltar = () => setAgora(Date.now())
+    document.addEventListener('visibilitychange', voltar)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', voltar) }
+  }, [])
 
-  const pct = durationRef.current > 0 ? remaining / durationRef.current : 0
+  const remaining = Math.max(0, Math.ceil((fimEm - agora) / 1000))
+
+  useEffect(() => {
+    if (remaining > 0 || avisou.current) return
+    avisou.current = true
+    navigator.vibrate?.([300, 120, 300])
+    bipar()
+    const t = setTimeout(onDone, 1200)
+    return () => clearTimeout(t)
+  }, [remaining]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function ajustar(seg: number) {
+    const novoFim = Math.max(Date.now() + 1000, fimEm + seg * 1000)
+    setFimEm(novoFim)
+    setTotal(t => Math.max(t, Math.ceil((novoFim - Date.now()) / 1000)))
+  }
+
+  const pct = total > 0 ? remaining / total : 0
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
   const ss = String(remaining % 60).padStart(2, '0')
-  const C = 2 * Math.PI * 19
+  const C = 2 * Math.PI * 22
+  const fim = remaining === 0
+  const btn: React.CSSProperties = {
+    height: 44, minWidth: 52, padding: '0 10px',
+    background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-strong)',
+    borderRadius: 14, color: 'var(--text)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+  }
 
   return (
-    <div style={{
-      position: 'absolute', left: 16, right: 16, bottom: 12, zIndex: 70,
-      background: 'rgba(10,11,13,0.96)', backdropFilter: 'blur(12px)',
-      border: `1px solid ${accent}60`,
-      borderRadius: 16, padding: '12px 16px',
-      display: 'flex', alignItems: 'center', gap: 14,
-      boxShadow: `0 8px 28px rgba(0,0,0,0.45), 0 0 20px ${accent}20`,
+    <div role="timer" aria-live="polite" style={{
+      position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 70,
+      background: fim ? accent : 'rgba(10,11,13,0.97)', backdropFilter: 'blur(12px)',
+      border: `1px solid ${accent}80`,
+      borderRadius: 18, padding: '12px 12px 12px 14px',
+      display: 'flex', alignItems: 'center', gap: 10,
+      boxShadow: `0 8px 28px rgba(0,0,0,0.45), 0 0 20px ${accent}30`,
       animation: 'slide-up 260ms cubic-bezier(.2,.7,.3,1)',
+      color: fim ? 'var(--accent-ink)' : 'var(--text)',
     }}>
-      <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
-        <svg width="44" height="44">
-          <circle cx="22" cy="22" r="19" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
-          <circle cx="22" cy="22" r="19" fill="none" stroke={accent} strokeWidth="3"
+      <div style={{ position: 'relative', width: 50, height: 50, flexShrink: 0 }}>
+        <svg width="50" height="50">
+          <circle cx="25" cy="25" r="22" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4"/>
+          <circle cx="25" cy="25" r="22" fill="none" stroke={fim ? 'var(--accent-ink)' : accent} strokeWidth="4"
             strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
-            transform="rotate(-90 22 22)"
-            style={{ transition: 'stroke-dashoffset 1s linear', filter: `drop-shadow(0 0 6px ${accent})` }}/>
+            transform="rotate(-90 25 25)" style={{ transition: 'stroke-dashoffset 250ms linear' }}/>
         </svg>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="timer" size={16} color={accent}/>
+          <Icon name="timer" size={18} color={fim ? 'var(--accent-ink)' : accent}/>
         </div>
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-2)', letterSpacing: '0.14em' }}>DESCANSO</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 2 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{fim ? 'Bora, próxima série!' : 'Descanso'}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 32, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 2 }}>
           {mm}:{ss}
         </div>
       </div>
-      <button onClick={() => setRemaining(r => Math.min(durationRef.current, r + 15))} style={{
-        height: 32, padding: '0 12px',
-        background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
-        borderRadius: 16, color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-      }}>+15s</button>
-      <button onClick={onCancel} style={{
-        width: 32, height: 32, borderRadius: 16,
-        background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
-        color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-      }}>
-        <Icon name="x" size={14} color="currentColor"/>
+      {!fim && <button onClick={() => ajustar(-15)} aria-label="Menos 15 segundos" style={btn}>−15</button>}
+      {!fim && <button onClick={() => ajustar(15)} aria-label="Mais 15 segundos" style={btn}>+15</button>}
+      <button onClick={onCancel} aria-label="Fechar descanso" style={{ ...btn, minWidth: 44, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: fim ? 'rgba(0,0,0,0.15)' : btn.background, color: 'inherit' }}>
+        <Icon name="x" size={16} color="currentColor"/>
       </button>
     </div>
   )
@@ -932,9 +1034,11 @@ interface DragInfo {
 }
 
 // ── Main TreinoClient ──────────────────────────────────────────────────────────
-export default function TreinoClient({ ficha, exercicios, userId, historicoMap }: {
+export default function TreinoClient({ ficha, exercicios, userId, historicoMap, ultimaVez = {}, recorde = {} }: {
   ficha: Ficha, exercicios: Exercicio[], userId: string,
   historicoMap: Record<string, { carga: number, date: string }[]>
+  ultimaVez?: Record<string, { carga: number, reps: number | null }[]>
+  recorde?: Record<string, number>
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -1066,8 +1170,24 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
   }
 
   function updateSet(exId: string, idx: number, patch: Partial<SetState>) {
+    // Recorde: concluir uma série de força acima da maior carga já registrada
+    const atual = setsByEx[exId]?.[idx]
+    const ex = exList.find(e => e.id === exId)
+    const pr = recorde[exId] ?? 0
+    const novoRecorde = !!patch.done && !!atual && !atual.done && (ex?.tipo ?? 'forca') === 'forca' && pr > 0 && atual.carga > pr
     setSetsByEx(prev => {
-      const next = { ...prev, [exId]: prev[exId].map((s, i) => i === idx ? { ...s, ...patch } : s) }
+      const antes = prev[exId][idx]
+      const next = { ...prev, [exId]: prev[exId].map((s, i) => {
+        if (i === idx) return { ...s, ...patch }
+        // Ajustar carga/reps da série da vez leva junto as próximas que tinham o mesmo valor
+        if (i > idx && !s.done && antes) {
+          const prop: Partial<SetState> = {}
+          if (patch.carga !== undefined && s.carga === antes.carga) prop.carga = patch.carga
+          if (patch.reps !== undefined && s.reps === antes.reps) prop.reps = patch.reps
+          return { ...s, ...prop }
+        }
+        return s
+      }) }
       if (patch.done) {
         const allSetsDone = next[exId].every(s => s.done)
         if (allSetsDone) {
@@ -1076,10 +1196,14 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
       }
       return next
     })
-    if (patch.done) setToast('Série marcada · descanso iniciado')
+    if (novoRecorde && atual) {
+      setToast(`🏆 Novo recorde: ${atual.carga} kg!`)
+      navigator.vibrate?.([80, 60, 80, 60, 160])
+    } else if (patch.done) setToast('Série concluída · descanso iniciado')
   }
 
   function startRest(sec: number) {
+    liberarSom()
     setRestDuration(sec)
     setRestKey(k => k + 1)
   }
@@ -1208,9 +1332,13 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
     setSaveError(false)
     const durMin = Math.max(1, Math.round(elapsedSec / 60))
     let volume = 0
+    let tevePr = false
     for (const ex of exList) {
       for (const s of setsByEx[ex.id] ?? []) {
-        if (s.done && (ex.tipo ?? 'forca') === 'forca') volume += s.carga * s.reps
+        if (s.done && (ex.tipo ?? 'forca') === 'forca') {
+          volume += s.carga * s.reps
+          if ((recorde[ex.id] ?? 0) > 0 && s.carga > recorde[ex.id]) tevePr = true
+        }
       }
     }
 
@@ -1220,7 +1348,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
       const { data: treino, error } = await supabase.from('treinos').insert({
         user_id: userId, ficha_id: ficha.id, ficha_letra: ficha.letra,
         data: todayBR(),
-        duracao_min: durMin, volume_total: Math.round(volume),
+        duracao_min: durMin, volume_total: Math.round(volume), teve_pr: tevePr,
       }).select().abortSignal(limite()).single()
       if (error || !treino) throw error ?? new Error('treino não salvo')
 
@@ -1405,6 +1533,8 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap }
                 expanded={expandedIds.has(ex.id)}
                 accent={accent}
                 historico={(historicoMap[ex.id] ?? []).map(h => h.carga)}
+                ultima={ultimaVez[ex.id] ?? []}
+                recorde={recorde[ex.id] ?? 0}
                 onOpenChart={() => {
                   const h = historicoMap[ex.id] ?? []
                   setChartModal({

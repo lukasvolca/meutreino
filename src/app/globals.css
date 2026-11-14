@@ -6,12 +6,12 @@
   --surface-1: #14161c;
   --surface-2: #1a1d25;
   --surface-3: #232631;
-  --border: rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.14);
+  --border: rgba(255,255,255,0.09);
+  --border-strong: rgba(255,255,255,0.18);
   --text: #ffffff;
-  --muted: rgba(255,255,255,0.62);
-  --muted-2: rgba(255,255,255,0.38);
-  --muted-3: rgba(255,255,255,0.18);
+  --muted: rgba(255,255,255,0.72);
+  --muted-2: rgba(255,255,255,0.52);
+  --muted-3: rgba(255,255,255,0.28);
   --accent: #CCFF00;
   --accent-ink: #0a0b0d;
   --accent-glow: 204, 255, 0;
@@ -94,3 +94,9 @@ body {
 .animate-fade-in { animation: fade-in 180ms ease both; }
 .animate-pulse-slow { animation: pulse 2s ease-in-out infinite; }
 .animate-shimmer { animation: shimmer 1.4s ease-in-out infinite; }
+
+/* iOS dá zoom ao focar campos com letra < 16px; como o zoom com dois dedos está
+   liberado, sobe os campos pequenos para 16px só no iOS (os grandes ficam como estão). */
+@supports (-webkit-touch-callout: none) {
+  input:not([data-grande]), textarea, select { font-size: 16px !important; }
+}

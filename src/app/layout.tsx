@@ -31,8 +31,7 @@ export const viewport: Viewport = {
   themeColor: '#0d0e12',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // zoom com dois dedos liberado (acessibilidade); campos usam fonte ≥16px para o iOS não dar zoom sozinho
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
