@@ -4,6 +4,6 @@ RewriteEngine On
 RewriteCond %{REQUEST_URI} !/api/index\.php$
 RewriteRule ^ index.php [L,QSA]
 
-<FilesMatch "^(config|config\.example|lib|auth|query|schema|google)\.php$|\.json$">
+<FilesMatch "^(config|config\.example|lib|auth|query|schema|google|recover)\.php$|\.json$">
   Require all denied
 </FilesMatch>

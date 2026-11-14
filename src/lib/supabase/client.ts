@@ -101,6 +101,14 @@ const auth = {
   async signOut() {
     return call('/auth/logout', { method: 'POST', body: '{}' })
   },
+  /** Envia o link de redefinição para o e-mail (resposta sempre neutra). */
+  async recover(email: string) {
+    return call('/auth/recover', { method: 'POST', body: JSON.stringify({ email }) })
+  },
+  /** Troca a senha usando o token do link e já entra na conta. */
+  async reset(token: string, password: string) {
+    return call('/auth/reset', { method: 'POST', body: JSON.stringify({ token, password }) })
+  },
 }
 
 const client = {

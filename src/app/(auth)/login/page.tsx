@@ -55,9 +55,14 @@ export default function LoginPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-mono font-semibold tracking-widest uppercase" style={{ color: 'var(--muted-2)' }}>
-            Senha
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-mono font-semibold tracking-widest uppercase" style={{ color: 'var(--muted-2)' }}>
+              Senha
+            </label>
+            <Link href="/esqueci-senha/" className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
+              Esqueci minha senha
+            </Link>
+          </div>
           <input
             type="password"
             required

@@ -3,6 +3,7 @@
 //   GET  /api/auth/me        POST /api/auth/login | /api/auth/signup | /api/auth/logout
 //   POST /api/q              consulta genérica (ver query.php)
 //   GET  /api/auth/google/start | /api/auth/google/callback   login com Google (google.php)
+//   POST /api/auth/recover | /api/auth/reset   recuperação de senha (recover.php)
 //   GET  /api/health
 
 require __DIR__ . '/schema.php';
@@ -10,6 +11,7 @@ require __DIR__ . '/lib.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/query.php';
 require __DIR__ . '/google.php';
+require __DIR__ . '/recover.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
@@ -28,6 +30,8 @@ if ($path === '/auth/me' && $method === 'GET') auth_me();
 if ($path === '/auth/login' && $method === 'POST') auth_login(body());
 if ($path === '/auth/signup' && $method === 'POST') auth_signup(body());
 if ($path === '/auth/logout' && $method === 'POST') auth_logout();
+if ($path === '/auth/recover' && $method === 'POST') auth_recover(body());
+if ($path === '/auth/reset' && $method === 'POST') auth_reset(body());
 if ($path === '/q' && $method === 'POST') q_handle(body());
 if ($path === '/auth/google/start' && $method === 'GET') google_start();
 if ($path === '/auth/google/callback' && $method === 'GET') google_callback_page();
