@@ -5,16 +5,13 @@ import { useUser } from '@/lib/session'
 import { useLoad } from '@/lib/load'
 import { PageSkeleton } from '@/components/Skeleton'
 import Link from 'next/link'
-import Icon from '@/components/icons'
+import Icon, { iconeDaFicha } from '@/components/icons'
 import { BarChart } from '@/components/charts'
 import { todayBR, addDays, mondayOf } from '@/lib/date'
 import DashboardHeroButton from './DashboardHeroButton'
 
-const SVG_ICON_NAMES = new Set(['dumbbell','benchPress','bicep','squat','flame','bolt','target','trophy','timer','body','chart','history','calendar','apple','home','play','check','settings','bell','user','camera','youtube','search','swap','more','info'])
 function renderFichaIcon(icone: string | null, size: number, color: string, strokeWidth = 1.8) {
-  if (!icone) return <Icon name="dumbbell" size={size} color={color} strokeWidth={strokeWidth}/>
-  if (SVG_ICON_NAMES.has(icone)) return <Icon name={icone} size={size} color={color} strokeWidth={strokeWidth}/>
-  return <span style={{ fontSize: size * 1.1, lineHeight: 1 }}>{icone}</span>
+  return <Icon name={iconeDaFicha(icone) ?? 'dumbbell'} size={size} color={color} strokeWidth={strokeWidth}/>
 }
 
 const weekKey = mondayOf

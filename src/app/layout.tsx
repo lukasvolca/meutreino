@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   title: 'MeuTreino',
   description: 'Seu app de treino personalizado',
   manifest: '/manifest.json',
+  icons: {
+    icon: [{ url: '/favicon.ico', sizes: '48x48' }, { url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: '/apple-touch-icon.png',
+  },
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'MeuTreino' },
 }
 

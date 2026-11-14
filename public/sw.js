@@ -1,7 +1,7 @@
 // v2: páginas vêm sempre da rede (dados frescos); o cache só é usado
 // como reserva quando não há conexão. Arquivos estáticos com hash ficam em cache.
-const CACHE = 'meutreino-v2'
-const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png']
+const CACHE = 'meutreino-v3'
+const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg', '/apple-touch-icon.png']
 
 self.addEventListener('install', e => {
   e.waitUntil(

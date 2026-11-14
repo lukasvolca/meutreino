@@ -6,7 +6,7 @@ import { useLoad } from '@/lib/load'
 import { PageSkeleton } from '@/components/Skeleton'
 import { todayBR } from '@/lib/date'
 import { Heatmap } from '@/components/charts'
-import Icon from '@/components/icons'
+import Icon, { iconeDaFicha } from '@/components/icons'
 
 type TreinoRow = {
   id: string
@@ -172,7 +172,7 @@ function Conteudo({ treinosRaw }: Awaited<ReturnType<typeof carregar>>) {
                 color: 'var(--muted)', flexShrink: 0,
               }}>
                 {ficha?.icone ? (
-                  <Icon name={ficha.icone} size={22} strokeWidth={1.8}/>
+                  <Icon name={iconeDaFicha(ficha.icone) ?? 'dumbbell'} size={22} strokeWidth={1.8}/>
                 ) : (
                   <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14 }}>{t.ficha_letra ?? '?'}</span>
                 )}
