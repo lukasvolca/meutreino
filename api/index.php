@@ -4,6 +4,7 @@
 //   POST /api/q              consulta genérica (ver query.php)
 //   GET  /api/auth/google/start | /api/auth/google/callback   login com Google (google.php)
 //   POST /api/auth/recover | /api/auth/reset   recuperação de senha (recover.php)
+//   POST /api/importar (multipart) | /api/importar/salvar   importar ficha por foto/PDF (importar.php)
 //   GET  /api/health
 
 require __DIR__ . '/schema.php';
@@ -33,6 +34,12 @@ if ($path === '/auth/logout' && $method === 'POST') auth_logout();
 if ($path === '/auth/recover' && $method === 'POST') auth_recover(body());
 if ($path === '/auth/reset' && $method === 'POST') auth_reset(body());
 if ($path === '/q' && $method === 'POST') q_handle(body());
+// Importação carregada só nas suas rotas: um problema nela não derruba o resto da API
+if (str_starts_with($path, '/importar') && $method === 'POST') {
+  require __DIR__ . '/importar.php';
+  if ($path === '/importar') importar_ler();
+  if ($path === '/importar/salvar') importar_salvar(body());
+}
 if ($path === '/auth/google/start' && $method === 'GET') google_start();
 if ($path === '/auth/google/callback' && $method === 'GET') google_callback_page();
 if ($path === '/auth/google/callback' && $method === 'POST') google_callback();

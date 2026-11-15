@@ -106,7 +106,7 @@ const TABLES = [
 ];
 
 // DDL do MySQL. Executado de forma idempotente na primeira requisição de cada versão.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function schema_sql(): array {
   $e = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
@@ -321,6 +321,22 @@ function schema_sql(): array {
       nonce CHAR(64) NOT NULL,
       verifier VARCHAR(128) NOT NULL,
       created_at $now
+    ) $e",
+    // v4 — importação de fichas por foto/PDF (guarda a leitura completa para a periodização futura)
+    "CREATE TABLE IF NOT EXISTS importacoes (
+      id CHAR(36) PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      status VARCHAR(12) NOT NULL,
+      arquivos TEXT NULL,
+      resultado MEDIUMTEXT NULL,
+      revisado MEDIUMTEXT NULL,
+      erro VARCHAR(500) NULL,
+      tokens_in INT NOT NULL DEFAULT 0,
+      tokens_out INT NOT NULL DEFAULT 0,
+      salvo_em DATETIME(3) NULL,
+      created_at $now,
+      INDEX (user_id, created_at),
+      FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
     ) $e",
   ];
 }

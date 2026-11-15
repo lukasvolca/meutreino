@@ -2,7 +2,7 @@
 // nomes usados no código desde o protótipo. Supino e agachamento não existem no
 // Lucide e foram desenhados aqui no mesmo grid de 24px e traço.
 import {
-  Accessibility, Activity, Apple, ArrowDown, ArrowLeftRight, ArrowUp, Award, Bell, BicepsFlexed, Bike, Brain,
+  Accessibility, Activity, Apple, CircleAlert, FileText, ImagePlus, ScanText, Sparkles, ArrowDown, ArrowLeftRight, ArrowUp, Award, Bell, BicepsFlexed, Bike, Brain,
   Calendar, Camera, ChartLine, Check, ChevronDown, ChevronLeft, ChevronRight, CirclePlay, Crown, Dumbbell,
   Ellipsis, Flame, Footprints, Gauge, Goal, GripVertical, Heart, HeartPulse, History, Hourglass, House, Info,
   LogOut, Medal, MessageCircle, Minus, MonitorPlay, Mountain, Pause, Pencil, PersonStanding, Phone, Play, Plus,
@@ -27,6 +27,7 @@ const LUCIDE: Record<string, LucideIcon> = {
   search: Search, swap: ArrowLeftRight, more: Ellipsis, pause: Pause, bell: Bell, chat: MessageCircle,
   phone: Phone, user: User, logout: LogOut, info: Info, trophy: Trophy, calendar: Calendar, apple: Apple,
   bicep: BicepsFlexed,
+  file: FileText, imagePlus: ImagePlus, scan: ScanText, sparkles: Sparkles, alert: CircleAlert,
   // Extras para as fichas
   heartPulse: HeartPulse, activity: Activity, bike: Bike, footprints: Footprints, mountain: Mountain,
   waves: Waves, medal: Medal, award: Award, swords: Swords, gauge: Gauge, weight: Weight, rocket: Rocket,

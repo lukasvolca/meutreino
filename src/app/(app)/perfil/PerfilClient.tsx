@@ -188,20 +188,28 @@ export default function PerfilClient({ profile, fichas, treinosTotal }: {
       <div style={{ padding: '0 20px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17 }}>Fichas de treino</div>
-          <button onClick={openNovaFicha}
-            style={{ height: 28, padding: '0 12px', borderRadius: 14, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'rgba(204,255,0,0.1)', color: 'var(--accent)', border: 0 }}>
-            + Nova ficha
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Link href="/importar/"
+              style={{ height: 32, padding: '0 12px', borderRadius: 16, fontSize: 13, fontWeight: 700, background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              <Icon name="scan" size={14}/> Importar
+            </Link>
+            <button onClick={openNovaFicha}
+              style={{ height: 32, padding: '0 12px', borderRadius: 16, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: 'rgba(204,255,0,0.1)', color: 'var(--accent)', border: 0 }}>
+              + Nova
+            </button>
+          </div>
         </div>
         {fichas.length === 0 ? (
-          <button onClick={openNovaFicha}
+          <Link href="/importar/"
             style={{
-              width: '100%', padding: 20, borderRadius: 18, textAlign: 'center', cursor: 'pointer',
+              width: '100%', padding: 20, borderRadius: 18, textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box',
               background: 'var(--surface-1)', border: '1px dashed rgba(255,255,255,0.2)', color: 'var(--muted)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
             }}>
-            <span style={{ fontSize: 13 }}>Nenhuma ficha ainda</span>
-          </button>
+            <Icon name="scan" size={22} color="var(--accent)"/>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Tem a ficha do seu personal?</span>
+            <span style={{ fontSize: 13 }}>Mande uma foto ou PDF e o app monta os treinos.</span>
+          </Link>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {fichas.map(f => (
