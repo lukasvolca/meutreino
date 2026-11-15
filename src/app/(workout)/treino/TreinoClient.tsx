@@ -748,7 +748,7 @@ function ExerciseEditor({ ex, fichaId, onClose, onSaved }: {
       carga: tipo === 'forca' ? (parseFloat(carga.replace(',', '.')) || 0) : 0,
       is_biset: tipo === 'forca' && isBiset,
       carga_b: tipo === 'forca' && isBiset ? (parseFloat(cargaB.replace(',', '.')) || 0) : 0,
-      descanso: parseInt(descanso) || 60,
+      descanso: Number.isFinite(parseInt(descanso)) ? Math.max(0, parseInt(descanso)) : 60,
       yt_id: ytId.trim() || null,
       duracao_seg: tipo === 'iso' ? (parseInt(duracaoSeg) || 30) : null,
       duracao_min: tipo === 'cardio' ? (parseInt(duracaoMin) || 10) : null,
@@ -1201,6 +1201,7 @@ export default function TreinoClient({ ficha, exercicios, userId, historicoMap, 
   }
 
   function startRest(sec: number) {
+    if (sec <= 0) return   // 0 s = vai direto para o próximo exercício (ex.: bi-set)
     liberarSom()
     setRestDuration(sec)
     setRestKey(k => k + 1)

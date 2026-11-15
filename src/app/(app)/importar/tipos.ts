@@ -59,8 +59,20 @@ export function paraRevisao(l: Leitura): FichaRev[] {
     letra: (f.letra || String.fromCharCode(65 + i)).slice(0, 4).toUpperCase(),
     nome: f.nome,
     cor: CORES[i % CORES.length],
-    exercicios: f.exercicios.map(e => ({ ...e, key: novaKey(), conferido: e.confianca === 'alta' })),
+    exercicios: f.exercicios.flatMap(separarBiset).map(e => ({ ...e, key: novaKey(), conferido: e.confianca === 'alta' })),
   }))
+}
+
+/** Bi-set ("Rosca Alternada + Rosca Concentrada") vira dois exercícios seguidos: o primeiro
+ *  sem descanso (vai direto para o próximo) e o segundo com o descanso da ficha. */
+function separarBiset(e: ExLido): ExLido[] {
+  if (!e.is_biset || e.tipo !== 'forca') return [e]
+  const partes = e.nome.split(/\s*\+\s*/).map(p => p.trim()).filter(Boolean)
+  if (partes.length !== 2) return [{ ...e, is_biset: false }]
+  return [
+    { ...e, nome: partes[0], is_biset: false, carga_b: null, descanso_seg: 0 },
+    { ...e, nome: partes[1], is_biset: false, carga: e.carga_b, carga_b: null },
+  ]
 }
 
 export function exVazio(): ExRev {
@@ -78,6 +90,7 @@ export function resumoEx(e: ExLido): string {
   else if (e.tipo === 'cardio') partes.push(`${e.duracao_min ?? '?'} min`)
   else partes.push(`${e.series} × ${e.reps || '?'}`)
   if (e.tipo === 'forca' && e.ultima_ate_falha) partes.push('última até a falha')
-  if (e.descanso_seg) partes.push(`${e.descanso_seg} s de descanso`)
+  if (e.descanso_seg === 0) partes.push("sem descanso, vai direto ao próximo")
+  else if (e.descanso_seg) partes.push(`${e.descanso_seg} s de descanso`)
   return partes.join(' · ')
 }
