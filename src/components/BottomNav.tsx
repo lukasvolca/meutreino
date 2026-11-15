@@ -6,8 +6,9 @@ import Icon from '@/components/icons'
 
 const NAV_H = 86
 
-const TABS = [
+const TABS: { href: string; label: string; icon: string; tambem?: string[] }[] = [
   { href: '/dashboard', label: 'Hoje', icon: 'home' },
+  { href: '/fichas', label: 'Treino', icon: 'dumbbell', tambem: ['/treino', '/importar'] },
   { href: '/progresso', label: 'Progresso', icon: 'chart' },
   { href: '/dieta', label: 'Dieta', icon: 'apple' },
   { href: '/corpo', label: 'Corpo', icon: 'body' },
@@ -16,7 +17,8 @@ const TABS = [
 
 export default function BottomNav() {
   const path = usePathname()
-  const active = TABS.find(t => path.startsWith(t.href))?.href ?? '/dashboard'
+  // Telas fora das abas (ex.: Perfil) não acendem nenhuma
+  const active = TABS.find(t => [t.href, ...(t.tambem ?? [])].some(h => path.startsWith(h)))?.href
 
   return (
     <div style={{
@@ -37,7 +39,7 @@ export default function BottomNav() {
         display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'center',
-        padding: '0 8px 24px',
+        padding: '0 4px 24px',
         pointerEvents: 'auto',
       }}>
         {TABS.map(({ href, label, icon }) => {
@@ -54,7 +56,7 @@ export default function BottomNav() {
               color: isActive ? 'var(--accent)' : 'var(--muted-2)',
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
-              letterSpacing: '0.08em',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
               fontWeight: 600,
               position: 'relative',

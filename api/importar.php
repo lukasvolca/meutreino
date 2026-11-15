@@ -7,8 +7,8 @@
 // ou 'claude'. As chamadas são HTTP direto (curl): a hospedagem não tem Composer/SSH para
 // instalar SDKs, e é uma única requisição.
 
-const GEMINI_MODEL = 'gemini-3.8-flash';   // dá para trocar em config.php ('gemini_model')
-const GEMINI_RESERVA = 'gemini-3.6-flash'; // usado quando o principal está sobrecarregado ('gemini_reserva')
+const GEMINI_MODEL = 'gemini-3.6-flash';   // dá para trocar em config.php ('gemini_model')
+const GEMINI_RESERVA = 'gemini-3.8-flash'; // usado quando o principal falha ou demora ('gemini_reserva')
 const CLAUDE_MODEL = 'claude-opus-5-5';
 const IMPORT_MAX_ARQUIVOS = 6;
 const IMPORT_MAX_BYTES = 10 * 1024 * 1024;      // por arquivo
@@ -208,10 +208,14 @@ function importar_via_gemini(string $key, array $arquivos, string $principal, st
   }
   $input[] = ['type' => 'text', 'text' => 'Converta esta ficha de treino para o formato do app.'];
 
-  // Modelo sobrecarregado (503) ou cota do gratuito estourada (429): tenta o modelo reserva,
-  // que tem fila e cota próprias.
+  // Sem resposta a tempo (0), sobrecarga (5xx) ou cota do gratuito estourada (429): tenta o
+  // modelo reserva, que tem fila e cota próprias, no tempo que sobrar (o PHP para em 280 s).
   $modelos = array_values(array_unique(array_filter([$principal, $reserva])));
+  $inicio = time();
   foreach ($modelos as $n => $modelo) {
+    $ultimo = $n === count($modelos) - 1;
+    $prazo = $ultimo ? 265 - (time() - $inicio) : 150;
+    if ($prazo < 40) break;
     [$http, $resp, $cerr] = importar_post(
       'https://generativelanguage.googleapis.com/v1beta/interactions',
       ['x-goog-api-key: ' . $key, 'Api-Revision: 2026-05-20'],
@@ -223,9 +227,9 @@ function importar_via_gemini(string $key, array $arquivos, string $principal, st
         'generation_config' => ['thinking_level' => 'medium', 'max_output_tokens' => 32000],
         'store' => false,   // não guardar a conversa no Google
       ],
-      $n === 0 && count($modelos) > 1 ? 120 : 150
+      $prazo
     );
-    if (in_array($http, [429, 503], true) && $n < count($modelos) - 1) continue;
+    if (!$ultimo && in_array($http, [0, 429, 500, 502, 503, 504], true)) continue;
     break;
   }
   if ($http !== 200 || !is_array($resp)) return importar_falha_http($modelo, $http, $resp, $cerr);

@@ -48,6 +48,10 @@ const MENSAGENS = [
   'Quase pronto',
 ]
 
+// Progresso estimado pelo tempo (o servidor não informa etapas): sobe rápido no começo e
+// vai desacelerando sem chegar a 100% — ~63% em 40 s, ~80% em 1 min, 95% no máximo.
+const progressoEstimado = (s: number) => 0.95 * (1 - Math.exp(-s / 40))
+
 export default function ImportarPage() {
   const user = useUser()
   const router = useRouter()
@@ -64,6 +68,7 @@ export default function ImportarPage() {
   const [fichas, setFichas] = useState<FichaRev[]>([])
   const [salvando, setSalvando] = useState(false)
   const [segundos, setSegundos] = useState(0)
+  const [concluido, setConcluido] = useState(false)
 
   // Libera as prévias ao sair
   const arquivosRef = useRef(arquivos)
@@ -103,6 +108,7 @@ export default function ImportarPage() {
     if (!arquivos.length) return
     setErro(null)
     setSegundos(0)
+    setConcluido(false)
     setEtapa('lendo')
     try {
       const fd = new FormData()
@@ -119,6 +125,8 @@ export default function ImportarPage() {
       if (!res.ok || !json?.data) throw new Error(json?.error?.message ?? (res.status === 413 ? 'Arquivos grandes demais. Envie menos páginas.' : `Erro ${res.status}`))
       const l = json.data as Leitura
       if (!l.legivel || !l.fichas?.length) throw new Error(l.avisos?.[0] ?? 'Não encontramos uma ficha de treino nesses arquivos. Tente uma foto mais nítida.')
+      setConcluido(true)                       // completa a barra antes de trocar de tela
+      await new Promise(r => setTimeout(r, 450))
       setLeitura(l)
       setFichas(paraRevisao(l))
       setEtapa('revisar')
@@ -173,22 +181,37 @@ export default function ImportarPage() {
 
   // ── Lendo ──────────────────────────────────────────────────────────────────
   if (etapa === 'lendo') {
-    const msg = MENSAGENS[Math.min(MENSAGENS.length - 1, Math.floor(segundos / 8))]
+    const prog = concluido ? 1 : progressoEstimado(segundos)
+    const msg = concluido ? 'Pronto' : MENSAGENS[Math.min(MENSAGENS.length - 1, Math.floor(prog / 0.95 * MENSAGENS.length))]
+    const pct = Math.round(prog * 100)
     return (
       <div style={{ minHeight: 'calc(100dvh - 200px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 32px', textAlign: 'center', gap: 22 }}>
         <div style={{ position: 'relative', width: 96, height: 96 }}>
           <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '3px solid rgba(204,255,0,0.12)', borderTopColor: 'var(--accent)', animation: 'spin 1.1s linear infinite' }}/>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-            <Icon name="scan" size={34}/>
+            <Icon name={concluido ? 'check' : 'scan'} size={34}/>
           </div>
         </div>
         <div>
-          <div key={msg} className="animate-fade-in" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' }}>{msg}…</div>
+          <div key={msg} className="animate-fade-in" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' }}>{msg}{concluido ? '!' : '…'}</div>
           <div style={{ marginTop: 8, fontSize: 14, color: 'var(--muted-2)', lineHeight: 1.5 }}>
-            Costuma levar menos de um minuto. Pode deixar o celular parado aqui.
+            Costuma levar cerca de um minuto. Pode deixar o celular parado aqui.
           </div>
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-3)' }}>{segundos}s</div>
+        <div style={{ width: '100%', maxWidth: 300 }}>
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Progresso da leitura"
+            style={{ height: 8, borderRadius: 4, background: 'var(--surface-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${pct}%`, borderRadius: 4, background: 'var(--accent)',
+              boxShadow: '0 0 12px rgba(204,255,0,0.45)',
+              transition: concluido ? 'width 0.4s ease-out' : 'width 1s linear',
+            }}/>
+          </div>
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted-3)' }}>
+            <span>{pct}%</span>
+            <span>{segundos}s</span>
+          </div>
+        </div>
       </div>
     )
   }

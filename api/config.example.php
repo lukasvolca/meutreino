@@ -13,7 +13,7 @@ return [
   // Leitura de fichas por foto/PDF (Perfil → Importar)
   'import_provider' => 'gemini',        // 'gemini' (tem nível gratuito) ou 'claude' (pago)
   'gemini_key' => '',                   // chave do Google AI Studio (aistudio.google.com)
-  'gemini_model' => 'gemini-3.8-flash', // modelo do Gemini; vazio = padrão do importar.php
-  'gemini_reserva' => 'gemini-3.6-flash', // usado quando o principal estiver sobrecarregado
+  'gemini_model' => 'gemini-3.6-flash', // modelo do Gemini; vazio = padrão do importar.php
+  'gemini_reserva' => 'gemini-3.8-flash', // usado quando o principal falha ou demora
   'anthropic_key' => '',                // chave da API da Anthropic (console.anthropic.com), se usar 'claude'
 ];
